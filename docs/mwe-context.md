@@ -162,7 +162,7 @@ This section exists in every claim the project makes.
   picked cannot be resumed with escalated privilege or a stale generation.
 - **Concurrency is not covered.** Two CPUs resuming contexts simultaneously is
   outside the model, and outside Thermite's expressiveness. See
-  [G2](language-gaps.md#g2--no-concurrency-semantics).
+  [G2](language-gaps.md#g2-no-concurrency-semantics).
 
 ## Expected certificate
 

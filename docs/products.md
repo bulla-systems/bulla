@@ -44,7 +44,7 @@ network stack and drivers, with no IPC on the hot path.
   writable page unless configured, the runqueue is consistent with per-task
   state, no lock-ordering cycle exists globally. Those need whole-system
   reasoning, where cost is superlinear.
-- **Concurrency.** See [G2](language-gaps.md#g2--no-concurrency-semantics).
+- **Concurrency.** See [G2](language-gaps.md#g2-no-concurrency-semantics).
   Thermite has no concurrency semantics at all, and this profile is where that
   binds hardest.
 
@@ -59,7 +59,7 @@ gracefully is worth more than one that requires completion to be true.
 
 ## What decides whether `monolithic` is real
 
-[G2](language-gaps.md#g2--no-concurrency-semantics).
+[G2](language-gaps.md#g2-no-concurrency-semantics).
 
 If concurrency gets a semantics in Thermite, monolithic scope becomes arguable
 and the interesting subsystems come inside the core. If it does not, `separation`
