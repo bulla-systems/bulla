@@ -34,9 +34,13 @@ epoch is never resumable.
 
 ## Sketch
 
-> Types below follow `context.rs` as surveyed. Field names must be confirmed
-> against the source before implementation. This is a specification rather than a
-> transcription.
+> **Corrected against the source on 2026-08-03.** The earlier sketch put a
+> `privilege` field on `UserContext` and carried P1 as an invariant there. That
+> field does not exist. `privilege` lives on `TrapFrame`, which is where the
+> invariant belongs. The sketch also named functions (`resumable`, `on_trap`)
+> that are not the ones `context.rs` has, and omitted the capability argument
+> every transition takes. What follows now matches
+> [`kernel/src/context.rs`](../kernel/src/context.rs).
 
 ```rust
 enum Privilege { Kernel, User }
@@ -61,37 +65,58 @@ struct UserContext {
   registers: Registers,
   generation: u64,
   runnable: bool,
+}
+
+struct TrapFrame {
+  context: u32,
+  origin: TrapOrigin,
+  registers: Registers,
   privilege: Privilege,
+  generation: u64,
 }
   inv privilege == Privilege::User      // P1, structurally
 ```
 
-P1 is carried by the struct invariant, which is the strongest form available: a
-`UserContext` that is not `User`-privileged cannot be constructed, so no
-transition function can produce one. Every function returning a `UserContext`
-owes the invariant as a proof obligation.
+P1 is carried by the invariant on `TrapFrame`, which is the strongest form
+available: a `TrapFrame` that is not `User`-privileged cannot be constructed, so
+no transition can produce one. Every function returning a `TrapFrame` owes the
+invariant as a proof obligation.
+
+The source supports this. Both constructors, `enter` and `trap`, write
+`privilege: Privilege::User` as a literal, so the invariant holds by
+construction. `resume` then checks `frame.privilege != Privilege::User` and
+returns `WrongPrivilege`. Under the invariant that branch is unreachable, which
+is a result in itself: the proof is stronger than the runtime check, and
+discharging P1 should show the check to be dead rather than load-bearing.
+
+The three transitions to port, with the signatures `context.rs` actually has:
 
 ```rust
-fn resumable(ctx: UserContext, epoch: u64) -> (r: bool)
+fn enter(ctx: UserContext, cap: Capability) -> (r: Result<TrapFrame, ContextError>)
   req true
-  ens r ==> ctx.generation == epoch          // P2
-  ens r ==> ctx.runnable
-  fx pure
-{
-  ctx.runnable && ctx.generation == epoch
-}
+  ens r.is_ok() ==> !final(ctx).runnable          // entering consumes runnability
+  ens r.is_ok() ==> r.unwrap().generation == ctx.generation
+  ens !ctx.runnable ==> r == Err(ContextError::NotRunnable)
 
-fn on_trap(ctx: UserContext, origin: TrapOrigin) -> (out: UserContext)
-  req ctx.runnable
-  ens out.privilege == Privilege::User       // P1, restated at the boundary
-  ens out.generation == ctx.generation       // a trap does not advance the epoch
-  fx pure
-{ /* ... */ }
+fn trap(ctx: UserContext, cap: Capability, origin: TrapOrigin, regs: Registers)
+    -> (r: Result<TrapFrame, ContextError>)
+  req true
+  ens r.is_ok() ==> r.unwrap().generation == ctx.generation   // a trap does not advance the epoch
+
+fn resume(ctx: UserContext, cap: Capability, frame: TrapFrame, result: u64)
+    -> (r: Result<(), ContextError>)
+  req true
+  ens frame.generation != ctx.generation ==> r == Err(ContextError::WrongGeneration)   // P2
+  ens frame.context != ctx.id ==> r == Err(ContextError::WrongContext)
+  ens r.is_ok() ==> final(ctx).generation == ctx.generation + 1
+  ens r.is_ok() ==> final(ctx).runnable
 ```
 
-`resumable` is a total function whose postcondition constrains it to return true
-only with a matching generation and a runnable context. The kernel's resume path
-calls it, and a false clause here yields a concrete `(generation, epoch)` pair.
+`resume` carries P2: the only path to `Ok` runs through a generation equal to the
+context's, and success advances the epoch by one. A false clause yields a
+concrete `(frame.generation, ctx.generation)` pair. The `checked_add` in the
+source means `GenerationOverflow` is a real branch and needs its own clause
+rather than an assumed-total increment.
 
 ## What this does not prove
 

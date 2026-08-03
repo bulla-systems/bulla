@@ -52,9 +52,33 @@ the build host as well as the source and the pin. The profile says
 than this; `docs/architecture.md` had read it as the stronger property, and has
 been corrected.
 
-Narrowing the gap is separate work and is not part of this pass. The likely
-levers are `--remap-path-prefix`, a pinned linker, and a container-fixed
-toolchain.
+The cause was then narrowed by comparing the two `BOOTX64.EFI` binaries
+directly. They are the same size, with identical section tables and identical
+public symbol sets, and 31.3% of the bytes differ, almost all of it in `.text`:
+
+```
+.text    103936 bytes   34716 differ   33.4%
+.rdata     3584 bytes      99 differ    2.8%
+.data / .eh_fram / .trampol / .reloc     0 differ
+```
+
+Disassembling both shows the same instruction stream with different call
+targets, so the functions are laid out in a different order rather than compiled
+differently. Two things this rules out:
+
+- **Not embedded paths.** Only two strings differ between the binaries, both the
+  LLD-generated PDB name (`BOOTX64-5f83f3a1d0cfcf22.pdb` against
+  `BOOTX64-e6c3997dabe64965.pdb`). No source path appears in either.
+  `--remap-path-prefix` would not change this, and an earlier draft of this
+  document named it as a likely lever in error.
+- **Not a compiler version difference.** Both hosts run rustc 1.95.0
+  (`59807616e`) with LLVM 22.1.2.
+
+What remains is the host build of the toolchain itself: the same LLVM version
+built against a different standard library makes different tie-breaking
+decisions in section ordering. That points at a fixed build environment, a
+container image pinned by digest, rather than a compiler flag. Confirming it and
+implementing it is separate work.
 
 ### Determinism
 
