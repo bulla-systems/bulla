@@ -1,0 +1,223 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # The upstream pin. Keep in step with docs/upstream-pin.md and scripts/*.sh.
+  THERMITE_PIN: 84d276e76ed02509ea58812efc15861d58580a42
+  VERUS_VERSION: 0.2026.05.24.ecee80a
+
+jobs:
+  # Adapted from the `kernel-image` job in Thermite's .github/workflows/ci.yml at
+  # the pin. Two differences:
+  #
+  #   - Upstream builds forge from the checkout it is already in. Bulla is a
+  #     consumer, and forge resolves the platform profile and its output path
+  #     from its own compile-time workspace root, so the build goes through
+  #     scripts/build-image.sh, which overlays this repo's forked tree onto a
+  #     clone of the pin. See docs/upstream-pin.md.
+  #   - Upstream builds the image, boots it, and discards it. This job keeps it.
+  kernel-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain and UEFI target
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: x86_64-unknown-uefi
+
+      - name: Install QEMU, OVMF, FAT, and LLVM image tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes qemu-system-x86 ovmf dosfstools mtools llvm
+          qemu-system-x86_64 --version
+          llvm-pdbutil --version
+          # The acceptance harness needs a matched OVMF code/vars pair in one of
+          # its search roots. Record which layout this runner has, so a
+          # firmware-discovery failure is legible rather than a bare exception.
+          ls -l /usr/share/OVMF/ || true
+
+      - name: Cache Verus
+        uses: actions/cache@v4
+        with:
+          path: ~/verus-dist
+          key: verus-${{ env.VERUS_VERSION }}-x86-linux
+
+      - name: Install Verus
+        run: |
+          set -euo pipefail
+          if ! find "$HOME/verus-dist" -type f -name verus 2>/dev/null | grep -q .; then
+            curl -fsSL -o /tmp/verus.zip \
+              "https://github.com/verus-lang/verus/releases/download/release/${VERUS_VERSION}/verus-${VERUS_VERSION}-x86-linux.zip"
+            mkdir -p "$HOME/verus-dist"
+            unzip -q /tmp/verus.zip -d "$HOME/verus-dist"
+          fi
+          VERUS_BIN_PATH="$(find "$HOME/verus-dist" -type f -name verus | head -1)"
+          test -n "$VERUS_BIN_PATH"
+          echo "$(dirname "$VERUS_BIN_PATH")" >> "$GITHUB_PATH"
+          "$VERUS_BIN_PATH" --version
+
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .build/thermite
+          key: kernel-image
+
+      - name: Fork matches the upstream pin
+        run: make check-fork
+
+      - name: Build twice and compare byte for byte
+        run: make determinism
+
+      - name: Verify the published closure
+        run: make verify
+
+      - name: Boot the acceptance matrix
+        run: make boot-matrix
+
+      # The published artifact. Two builds on one machine cannot detect
+      # cross-host divergence, and were green on both hosts while the hosts
+      # disagreed; building through the digest-pinned toolchain makes the image
+      # depend on the source and the pin rather than on the runner. The full
+      # path runs here, so the receipt's image_sha256 is this image's.
+      - name: Build inside the pinned container
+        run: |
+          set -euo pipefail
+          make image-container IMAGE=dist/bulla-container.img
+          base=$(grep -oE 'sha256:[0-9a-f]{64}' Containerfile | head -1)
+          echo "BUILDER_BASE_DIGEST=$base" >> "$GITHUB_ENV"
+          {
+            echo "### Published image (container build)"
+            echo
+            echo '```'
+            echo "sha256  $(sha256sum dist/bulla-container.img | cut -d' ' -f1)"
+            echo "builder rust@$base"
+            echo "pin     ${THERMITE_PIN}"
+            echo '```'
+            echo
+            echo "Reproduce with the source at this commit, the pin, and that"
+            echo "builder digest. The host-native build above is a different"
+            echo "image and is not reproducible across machines."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record what the artifact is
+        run: |
+          set -euo pipefail
+          {
+            echo "### Image"
+            echo
+            echo '```'
+            echo "sha256  $(sha256sum dist/bulla.img | cut -d' ' -f1)"
+            echo "bytes   $(stat -c%s dist/bulla.img)"
+            echo "pin     ${THERMITE_PIN}"
+            echo '```'
+            echo
+            echo "Assurance carried: one exported function, \`kernel_step\`, certified"
+            echo "at L3 against \`ens result > 0\` through a clock-read boundary. No"
+            echo "kernel subsystem in this image is verified."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the image
+        uses: actions/upload-artifact@v4
+        with:
+          name: bulla-image-${{ github.sha }}
+          path: |
+            dist/bulla.img
+            dist/bulla.receipt.json
+            dist/bulla-container.img
+            dist/bulla-container.receipt.json
+            dist/bulla-container.sections
+            dist/bulla-container.symbols
+            dist/bulla.sections
+            dist/bulla.symbols
+            dist/boot-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: kernel-image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # oras is not in Ubuntu's archives; it ships as a release tarball.
+      - name: Install oras
+        env:
+          ORAS_VERSION: "1.2.3"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/oras.tar.gz \
+            "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          sudo tar -xzf /tmp/oras.tar.gz -C /usr/local/bin oras
+          oras version
+
+      - name: Download the built image
+        uses: actions/download-artifact@v4
+        with:
+          name: bulla-image-${{ github.sha }}
+          path: dist
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # The container build is what gets published, so a consumer can re-derive
+      # the bytes from the source, the pin, and the builder digest. The
+      # host-native build in the same artifact is a different image and is
+      # reproducible only on the machine that made it (docs/reproduction.md).
+      # It is republished under the plain names docs/running.md uses.
+      - name: Stage the container build for publication
+        run: |
+          set -euo pipefail
+          test -s dist/bulla-container.img
+          test -s dist/bulla-container.receipt.json
+          mkdir -p publish
+          cp dist/bulla-container.img         publish/bulla.img
+          cp dist/bulla-container.receipt.json publish/bulla.receipt.json
+          base=$(grep -oE 'sha256:[0-9a-f]{64}' Containerfile | head -1)
+          echo "BUILDER_BASE_DIGEST=$base" >> "$GITHUB_ENV"
+          # The receipt binds the image it was produced with. Publishing a
+          # receipt that names different bytes than the image beside it would be
+          # an unverifiable pairing, so it is checked rather than assumed.
+          img=$(sha256sum publish/bulla.img | cut -d' ' -f1)
+          named=$(python3 -c "import json;print(json.load(open('publish/bulla.receipt.json'))['image_sha256'])")
+          echo "image  $img"
+          echo "receipt names $named"
+          test "$img" = "$named"
+
+      # Pushed as an OCI artifact rather than a runnable container: this is a raw
+      # UEFI disk image. `oras pull` fetches it; `docker run` does not apply.
+      - name: Push the image to GHCR
+        run: |
+          set -euo pipefail
+          cd publish
+          oras push "ghcr.io/bulla-systems/bulla:${GITHUB_REF_NAME}" \
+            --artifact-type application/vnd.bulla.kernel-image.v1 \
+            --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --annotation "org.opencontainers.image.revision=${{ github.sha }}" \
+            --annotation "gay.dollspace.thermite.pin=${THERMITE_PIN}" \
+            --annotation "systems.bulla.builder.base=rust@${BUILDER_BASE_DIGEST}" \
+            --annotation "org.opencontainers.image.description=Bootable UEFI kernel image, built through the digest-pinned toolchain in Containerfile. Carries one certified exported function (kernel_step, L3). No kernel subsystem in it is verified." \
+            bulla.img:application/vnd.bulla.disk-image.raw \
+            bulla.receipt.json:application/vnd.bulla.receipt.v1+json

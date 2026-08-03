@@ -2,3 +2,16 @@ target/
 dist/
 *.img
 .DS_Store
+
+# Scratch clone of the upstream pin, built by scripts/build-image.sh.
+.build/
+
+# day's disposable render cache (display only; the process log lives in .kan).
+.day/
+
+# kan's local log and derived index. The shareable, signed form is .claims/,
+# which is tracked; `kan restore` rebuilds .kan from it.
+.kan/
+
+# Build root used by the containerized build.
+.build-container/

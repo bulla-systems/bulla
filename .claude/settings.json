@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "day hook session-start" },
+          { "type": "command", "command": "day hook session-notice" }
+        ]
+      }
+    ]
+  }
+}

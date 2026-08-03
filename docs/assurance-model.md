@@ -1,6 +1,6 @@
 # The assurance model
 
-What a Bulla certificate claims, and the vocabulary for saying it precisely.
+What a Bulla certificate claims, and the vocabulary for saying it.
 
 > **Tracking note.** This vocabulary follows Thermite RFC-2 (the certification
 > surface), which is proposed and not yet accepted upstream. Until it lands,
@@ -11,12 +11,12 @@ What a Bulla certificate claims, and the vocabulary for saying it precisely.
 ## Why not a single level number
 
 A scalar assurance level cannot carry what a certificate needs to say, because
-the underlying order is genuinely partial. Two mechanisms can differ in opposite
-directions at once: a solver route may refute better while being trusted less
-than a kernel-checked proof. Collapsing those into one number requires inventing
-a comparison, and an invented comparison eventually gets treated as real.
+the underlying order is partial. Two mechanisms can differ in opposite directions
+at once: a solver route may refute better while being trusted less than a
+kernel-checked proof. Collapsing those into one number requires inventing a
+comparison, and an invented comparison eventually gets treated as real.
 
-So a claim is a **tuple**, not a rung.
+A claim is therefore a tuple rather than a rung.
 
 ## The four coordinates
 
@@ -24,11 +24,11 @@ So a claim is a **tuple**, not a rung.
 scope / refutation / trust @ boundary
 ```
 
-**Scope** — what the claim quantifies over: `all`, `bounded(n)`, `per-exec`,
-`none`.
+**Scope**: what the claim quantifies over. One of `all`, `bounded(n)`,
+`per-exec`, `none`.
 
-**Refutation** — what a *false* clause yields. This is a property of the logical
-fragment, not of the proof:
+**Refutation**: what a false clause yields. This is a property of the logical
+fragment rather than of the proof.
 
 | value | meaning |
 |---|---|
@@ -39,8 +39,8 @@ fragment, not of the proof:
 | `abort` | detected in production, at the violating call |
 | `none` | — |
 
-**Trust** — what you must believe. A *set*, because routes can require several
-things at once:
+**Trust**: what you must believe. A set, since routes can require several things
+at once.
 
 | value | meaning |
 |---|---|
@@ -49,51 +49,47 @@ things at once:
 | `solver` | Z3/Verus soundness, per query |
 | `fiat` | trusted by declaration |
 
-`inspection` is a modifier rather than a value: renderer correspondence stays
-inspection-tier even after reconstruction.
+`inspection` is a modifier rather than a value. Renderer correspondence stays
+inspection-tier after reconstruction.
 
-**Boundary** — how far the claim closes: `e2e`, `to_boundary`,
+**Boundary**: how far the claim closes. One of `e2e`, `to_boundary`,
 `to_platform(p)`.
 
 ## Why the boundary coordinate matters here more than anywhere
 
-A kernel is mostly boundary. Every privileged operation — every MMIO write,
-every page-table load, every IPI — is a call into a body that is *assumed*, not
-proven. So a Bulla certificate that said only "proven for all inputs" would be
-close to meaningless.
+A kernel is mostly boundary. Every privileged operation, including every MMIO
+write, page-table load and IPI, is a call into an assumed body. A Bulla
+certificate reading only "proven for all inputs" would say very little.
 
-`to_platform(p)` names the specific frozen registry the claim closes against.
-The registry is the TCB, and it is enumerable: that is the entire point of the
-project.
+`to_platform(p)` names the frozen registry the claim closes against. The registry
+is the TCB, and it is enumerable, which is the point of the project.
 
-A kernel claim without its boundary coordinate is not a weaker claim. It is an
-unreadable one.
+A kernel claim without its boundary coordinate is unreadable rather than merely
+weaker.
 
-## Aggregation is deliberately unspecified
+## Aggregation is unspecified
 
 Composing clause tuples into an item tuple, and item tuples into an artifact
-tuple, is **not** per-axis minimum. The axes interact:
+tuple, is something other than a per-axis minimum. The axes interact:
 
-- **Refutation is fibered over scope.** `complete` means complete *relative to
-  the scope claimed*. `bounded(8)/trace(8)` and `all/complete` both say
-  "complete" and mean different strengths.
+- **Refutation is fibered over scope.** `complete` means complete relative to the
+  scope claimed. `bounded(8)/trace(8)` and `all/complete` both say "complete" at
+  different strengths.
 - **Boundary acts on refutation.** A clause that is completely refutable
-  `@to_boundary` is completely refutable *modulo the assumption*. A counterexample
+  `@to_boundary` is completely refutable modulo the assumption. A counterexample
   to the whole-program property can live inside the foreign body, where no
   channel observes it.
-- **Trust is not a flat set.** It splits into residual risk (which grows under
-  composition) and discharged evidence (which does not represent a liability).
+- **Trust is a structured set.** It splits into residual risk, which grows under
+  composition, and discharged evidence, which carries no liability.
 
-Until that algebra is characterized, Bulla reports **per-clause tuples and the
-weakest link on each axis separately**, and does not compute a single composite
-claim. Reporting less is the honest option.
+Until that algebra is characterized, Bulla reports per-clause tuples and the
+weakest link on each axis separately, and computes no single composite claim.
 
 ## The rule
 
 > Any assurance statement in this repository must be reducible to a set of
 > per-clause tuples with named boundaries. A prose summary that cannot be
-> expanded into tuples is not a claim; it is marketing, and it does not belong
-> in the documentation.
+> expanded into tuples is not a claim, and does not belong in the documentation.
 
 This applies to the README, to release notes, and to anything said about the
 project elsewhere.
