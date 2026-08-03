@@ -71,10 +71,13 @@ The path is (1) → (2). (3) is a direction, not a destination.
 
 | | |
 |---|---|
+| [Architecture](docs/architecture.md) | the four layers, the boundary registry, and how a `.th` program becomes a bootable image |
+| [Products](docs/products.md) | the two profiles — `separation` and `monolithic` — and what decides whether the second is real |
 | [Assurance model](docs/assurance-model.md) | what a certificate claims, and the vocabulary for saying it precisely |
 | [Roadmap](docs/roadmap.md) | T0–T4, with the blocker for each tier named |
 | [Language gaps](docs/language-gaps.md) | what Thermite cannot yet express, and what it would take |
 | [MWE: the privilege state machine](docs/mwe-context.md) | the first buildable increment, in full |
+| [Contributing](CONTRIBUTING.md) | the CI-vs-authoring enforcement split, and claims discipline |
 
 ## Relationship to prior work
 
