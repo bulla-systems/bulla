@@ -34,11 +34,20 @@ out_stem=${out_base%.img}
 clone="$BUILD_ROOT/thermite"
 mkdir -p "$BUILD_ROOT"
 
+# `git clone` refuses a non-empty destination, and the destination can already be
+# non-empty without being a repository: a CI cache restores $clone/target before
+# this ever runs. Init-and-fetch works from either state.
 if [[ ! -d "$clone/.git" ]]; then
-    echo "==> cloning upstream at the pin into $clone"
-    git clone --quiet --no-checkout "$THERMITE_REMOTE" "$clone"
+    echo "==> initializing $clone at the pin"
+    mkdir -p "$clone"
+    git -C "$clone" init --quiet
 fi
-git -C "$clone" fetch --quiet origin "$THERMITE_PIN" 2>/dev/null \
+if ! git -C "$clone" remote get-url origin >/dev/null 2>&1; then
+    git -C "$clone" remote add origin "$THERMITE_REMOTE"
+else
+    git -C "$clone" remote set-url origin "$THERMITE_REMOTE"
+fi
+git -C "$clone" fetch --quiet --tags origin "$THERMITE_PIN" 2>/dev/null \
     || git -C "$clone" fetch --quiet origin
 git -C "$clone" checkout --quiet --force "$THERMITE_PIN"
 git -C "$clone" clean --quiet -fdx -e target -e dist

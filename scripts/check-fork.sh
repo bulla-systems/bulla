@@ -37,10 +37,18 @@ else
 fi
 
 mkdir -p "$BUILD_ROOT"
+# Init-and-fetch rather than clone: the destination may already exist without
+# being a repository (see the same note in build-image.sh).
 if [[ ! -d "$clone/.git" ]]; then
-    git clone --quiet --no-checkout "$THERMITE_REMOTE" "$clone"
+    mkdir -p "$clone"
+    git -C "$clone" init --quiet
 fi
-git -C "$clone" fetch --quiet origin "$THERMITE_PIN" 2>/dev/null \
+if ! git -C "$clone" remote get-url origin >/dev/null 2>&1; then
+    git -C "$clone" remote add origin "$THERMITE_REMOTE"
+else
+    git -C "$clone" remote set-url origin "$THERMITE_REMOTE"
+fi
+git -C "$clone" fetch --quiet --tags origin "$THERMITE_PIN" 2>/dev/null \
     || git -C "$clone" fetch --quiet origin
 
 upstream_path() {
