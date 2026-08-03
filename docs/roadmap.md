@@ -33,8 +33,14 @@ does not change that ordering.
 
 ## Ordering rationale
 
-T0 is gated on one small upstream fix (G4). T1 is gated on effort. T2 and T3 are
-gated on a single unfinished Thermite requirement. T4 is gated on research.
+Every tier is gated on one small upstream fix,
+[G4](language-gaps.md#g4-struct-fields-of-user-declared-types), because 11 of the
+19 model files declare a struct with a user-declared field type and none of them
+certify today. After G4: T0 and T1 are gated on effort, T2 and T3 additionally on
+the [G1 audit](language-gaps.md#g1-map-coverage--open-question-not-a-gap), and T4
+on research.
+
+G4 is therefore the critical path, and it is the smallest of the three.
 
 One language increment, G1, unblocks the subsystems behind T2 and T3. Finishing
 `Map` lowering is plausibly higher-leverage for this project than any kernel

@@ -141,9 +141,23 @@ type, which is why this survives. `REQ-LOWER-ADT-STRUCT` and
 **Scope:** small. It is a missing dependency in harness construction rather than
 a semantics question.
 
-**Blocks:** [T0](roadmap.md), immediately. `UserContext` has
-`registers: Registers`; `TrapFrame` has `origin: TrapOrigin`,
-`registers: Registers` and `privilege: Privilege`.
+**Blocks:** every tier, which is what makes it the critical path rather than a
+T0 detail. Counted across the forked models on 2026-08-03, **11 of the 19 files**
+declare a struct with a user-declared field type:
+
+```
+event 5 · atomic 4 · context 4 · dma 4 · capability 3
+memory 2 · registry 2 · scheduler 1 · services 1 · smp 1 · sync 1
+```
+
+`context.rs` is T0, `capability.rs` is T1, `dma.rs` is T3, and
+`atomic`/`sync`/`smp` are T4. Modelling state as a record holding an enum or
+another record is the ordinary shape for these subsystems, so it is not a corner
+they can be written around.
+
+With [G1](#g1-map-coverage--open-question-not-a-gap) reduced to an unmeasured
+question, G4 is the only confirmed blocker in this document, and it sits upstream
+of every tier.
 
 ### G4b: `inv` does not bind the receiver for `is`
 
