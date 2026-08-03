@@ -143,6 +143,14 @@ those models *executing*, which is a test, not a proof.
 **This pass added no verification.** T0 in [the roadmap](roadmap.md) is where
 that starts, and it is NOT STARTED.
 
+### The published artifact was fetched and booted
+
+Not just built and uploaded — the CI artifact was downloaded onto the
+macOS/arm64 host, which did not build it, and booted there by following
+[`docs/running.md`](running.md) verbatim: 67108864 bytes, digest `2ef4fdad…`
+matching CI's, ending in `THERMITE_SUCCESS gate=boot-smp-v1`. That is the whole
+point of the pass — upstream built this image and discarded it.
+
 ## Problems found, and what was done about them
 
 ### 1. forge's kernel-image target only works from its own workspace
@@ -187,7 +195,24 @@ dies with `TypeError: write_text() got an unexpected keyword argument 'newline'`
 while writing its log — a passing boot reported as a failure. `ubuntu-latest` has
 3.12, so upstream CI never sees it. Recorded in `docs/running.md`.
 
-### 4. `registry.toml` points at a path this repository does not have
+### 4. Two defects that only CI could find
+
+Both are in this repository's own scripts, and both passed every local run:
+
+- **`oras` is not in Ubuntu's archives.** The first CI run died at the first
+  apt step. It is only needed by the tag-gated publish job, and now installs
+  there from its release tarball.
+- **`git clone` refuses a non-empty destination, and the cache makes it
+  non-empty.** `Swatinem/rust-cache` restores `.build/thermite/target` before
+  the build scripts run, so the directory exists without a `.git` and the clone
+  aborts. **The first CI run passed only because the cache was cold; the next
+  one failed.** Both scripts now init-and-fetch, which works from either state.
+
+The second is the instructive one. A green first run was not evidence that the
+script worked, and no amount of local testing starting from a clean tree would
+have caught it — the failure requires the state the previous success created.
+
+### 5. `registry.toml` points at a path this repository does not have
 
 The forked `registry.toml` says `registry_source = "thermite-kernel/src/registry.rs"`.
 Here that file is `kernel/src/registry.rs`. It is left as-is deliberately: the
