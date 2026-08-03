@@ -4,7 +4,9 @@ What Thermite cannot yet express that Bulla needs, with scope estimates. These
 belong upstream in [Thermite](https://github.com/dollspace-gay/Thermite), not
 here.
 
-Baseline surveyed at Thermite `84d276e7`.
+Baseline at Thermite `84d276e7` — the [upstream pin](upstream-pin.md). Counts
+below were re-checked against the forked tree on 2026-08-02; three of them were
+wrong in the original survey and are corrected here.
 
 ---
 
@@ -22,9 +24,13 @@ is a lowering and spec-function problem rather than a semantics problem.
 
 **Scope:** medium.
 
-**Unblocks:** T2 and T3 — roughly seven kernel subsystems. The kernel models are
-`BTreeMap`-heavy: `dma` (7 references), `device` (6), `frame` (6), `smp` (5),
-`scheduler` (5), `memory` (4), `irq` (4).
+**Unblocks:** T2 and T3. The kernel models are `BTreeMap`-heavy — counted in the
+forked tree rather than surveyed, **13 of the 19 model files** reference it:
+
+```
+device 6 · smp 5 · scheduler 5 · frame 5 · dma 5 · irq 4
+sync 3 · services 3 · memory 3 · event 3 · policy 2 · capability 2 · atomic 2
+```
 
 **This is the highest-leverage item in the entire plan.** One upstream
 requirement converts most of the kernel from blocked to buildable.
@@ -71,8 +77,9 @@ scoped optimistically.
 builtin generic application `NAME<T>`; AC-3 explicitly forbids a production for
 struct-as-Rust-generics.
 
-The kernel models use const generics — `policy.rs` has
-`ActionBatch<const N: usize>` — and light generics in `storage.rs` and `sync.rs`.
+The kernel models use const generics — `kernel/src/policy.rs:16` has
+`pub struct ActionBatch<const N: usize>` — and light generics in `storage.rs` and
+`sync.rs`.
 
 **Scope:** medium-to-large if solved properly.
 
@@ -85,10 +92,16 @@ prioritized over G1.
 
 ## Not gaps
 
-Worth recording explicitly, because it was the pleasant surprise of the survey:
-the kernel models are **essentially `unsafe`-free** — one `unsafe` in `lib.rs`,
-no raw pointers outside the registry, no traits. They are pure data-structure and
-logic code, which is exactly what Thermite is for.
+Worth recording explicitly, because it was the pleasant surprise of the survey —
+and it is better than the survey said. The kernel models are not "essentially
+`unsafe`-free". They are **entirely `unsafe`-free, and mechanically so**: the one
+occurrence of the word in `kernel/src/lib.rs` is `#![forbid(unsafe_code)]` at
+line 2. The survey counted that attribute as an instance of what it forbids.
+
+Confirmed against the forked tree: zero `unsafe` blocks across all 19 model
+files, no traits at all, and the only raw pointers are three ASCII signature
+strings in `registry.rs` describing `memcpy`/`memmove`/`memset` — text, not code.
+Pure data-structure and logic code, which is exactly what Thermite is for.
 
 The obstacle to verifying this kernel was never unsafety or hardware. It is
 collections and concurrency.

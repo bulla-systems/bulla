@@ -76,7 +76,7 @@ Twelve domains organize the 104 registry operations: `boot`, `memory`, `mmio`,
 ## Build pipeline
 
 ```
-  conformance/*.th
+  src/*.th
         │  forge build --target kernel-image --platform <profile>
         ▼
   proof closure ───────────► implementation closure
@@ -92,8 +92,23 @@ Twelve domains organize the 104 registry operations: `boot`, `memory`, `mmio`,
               SOURCE_DATE_EPOCH and volume ID pinned
 ```
 
-The receipt binds every member of both closures. `verify-build` re-checks it,
-and the image is republishable byte-for-byte from tracked source.
+The QEMU acceptance matrix is **part of this pipeline, not a separate CI step**:
+`forge build --target kernel-image` runs the frozen image builder and then the
+gate, and fails the build if any scenario fails. The receipt records one
+transcript digest per scenario.
+
+The receipt binds every member of both closures. `verify-build` re-checks those
+bindings and re-derives the proof evidence from current source. It does **not**
+rebuild the image or re-boot it unless given `--replay` — a plain
+`verify-build --json` reports `"replayed": false`. Reproducibility is therefore a
+separate check (`make determinism`), and is confirmed rather than inherited:
+[docs/reproduction.md](reproduction.md).
+
+One further thing a reader will hit: `forge` resolves the platform profile
+directory and its output path from **its own compile-time workspace root**, not
+from the current directory and not from a flag. A consumer repository cannot
+simply invoke it. See [docs/upstream-pin.md](upstream-pin.md) for the mechanism
+Bulla uses instead.
 
 ## Boot sequence
 
@@ -105,15 +120,25 @@ and the image is republishable byte-for-byte from tracked source.
 6. Scheduler, IPI round-trips, TLB shootdown, ring-3 entry, syscall and fault
 7. Allocator and DMA probes, entropy, power action
 
-Steps 1–6 exist and pass a QEMU gate at 1/2/4/8 CPUs plus AP-failure and reboot.
+All seven steps exist and pass a QEMU gate at 1/2/4/8 CPUs plus AP-start-failure
+and reboot — step 7 included: the gate asserts on the allocator, DMA, entropy,
+and power-action markers too. Reproduced here on 2026-08-02, six of six
+scenarios: [docs/reproduction.md](reproduction.md).
+
 **What is missing is not bring-up. It is a verified payload riding on top of it.**
+Passing that gate is a *test* result. It says these code paths execute and
+produce the expected transcript; it says nothing about their correctness, and
+none of the subsystems it exercises are proven.
 
 ## Where the verified core plugs in
 
 `forge build` takes `--compose-export <fn>` and `--compose-shell <file>`: the
 Thermite function becomes the entry point the platform calls, and the shell is
 the frozen implementation binding. Today that export is a single trivial
-function.
+function — `kernel_step` in [`src/bootable_kernel.th`](../src/bootable_kernel.th),
+whose whole postcondition is `result > 0`, discharged against a body that returns
+a clock field. It is a link-integrity probe. It is what the published image
+carries, and it is the entire proof content of that image.
 
 [T0](roadmap.md) replaces it with the privilege state machine — the same
 mechanism, carrying something worth proving.

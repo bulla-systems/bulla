@@ -1,0 +1,165 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # The upstream pin. Keep in step with docs/upstream-pin.md and scripts/*.sh.
+  THERMITE_PIN: 84d276e76ed02509ea58812efc15861d58580a42
+  VERUS_VERSION: 0.2026.05.24.ecee80a
+
+jobs:
+  # Adapted from the `kernel-image` job in Thermite's .github/workflows/ci.yml at
+  # the pin. Two differences that matter:
+  #
+  #   - Upstream builds forge from the checkout it is already in. Bulla is a
+  #     consumer, and forge resolves the platform profile and its output path
+  #     from its own compile-time workspace root, so the build goes through
+  #     scripts/build-image.sh, which overlays this repo's forked tree onto a
+  #     clone of the pin. See docs/upstream-pin.md.
+  #   - Upstream builds the image, boots it, and discards it. This job keeps it.
+  kernel-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain and UEFI target
+        uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: x86_64-unknown-uefi
+
+      - name: Install QEMU, OVMF, FAT, and LLVM image tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes qemu-system-x86 ovmf dosfstools mtools llvm oras
+          qemu-system-x86_64 --version
+          llvm-pdbutil --version
+          # The acceptance harness needs a matched OVMF code/vars pair in one of
+          # its search roots. Record which layout this runner actually has, so a
+          # firmware-discovery failure is legible rather than a bare exception.
+          ls -l /usr/share/OVMF/ || true
+
+      - name: Cache Verus
+        uses: actions/cache@v4
+        with:
+          path: ~/verus-dist
+          key: verus-${{ env.VERUS_VERSION }}-x86-linux
+
+      - name: Install Verus
+        run: |
+          set -euo pipefail
+          if ! find "$HOME/verus-dist" -type f -name verus 2>/dev/null | grep -q .; then
+            curl -fsSL -o /tmp/verus.zip \
+              "https://github.com/verus-lang/verus/releases/download/release/${VERUS_VERSION}/verus-${VERUS_VERSION}-x86-linux.zip"
+            mkdir -p "$HOME/verus-dist"
+            unzip -q /tmp/verus.zip -d "$HOME/verus-dist"
+          fi
+          VERUS_BIN_PATH="$(find "$HOME/verus-dist" -type f -name verus | head -1)"
+          test -n "$VERUS_BIN_PATH"
+          echo "$(dirname "$VERUS_BIN_PATH")" >> "$GITHUB_PATH"
+          "$VERUS_BIN_PATH" --version
+
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .build/thermite
+          key: kernel-image
+
+      - name: Fork matches the upstream pin
+        run: make check-fork
+
+      - name: Build twice and compare byte for byte
+        run: make determinism
+
+      - name: Verify the published closure
+        run: make verify
+
+      - name: Boot the acceptance matrix
+        run: make boot-matrix
+
+      - name: Record what the artifact is
+        run: |
+          set -euo pipefail
+          {
+            echo "### Image"
+            echo
+            echo '```'
+            echo "sha256  $(sha256sum dist/bulla.img | cut -d' ' -f1)"
+            echo "bytes   $(stat -c%s dist/bulla.img)"
+            echo "pin     ${THERMITE_PIN}"
+            echo '```'
+            echo
+            echo "Assurance carried: one exported function, \`kernel_step\`, certified"
+            echo "at L3 — \`ens result > 0\` against a clock-read boundary. That is the"
+            echo "whole of it. No kernel subsystem in this image is verified."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the image
+        uses: actions/upload-artifact@v4
+        with:
+          name: bulla-image-${{ github.sha }}
+          path: |
+            dist/bulla.img
+            dist/bulla.receipt.json
+            dist/bulla.sections
+            dist/bulla.symbols
+            dist/boot-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: kernel-image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install oras
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes oras
+          oras version
+
+      - name: Download the built image
+        uses: actions/download-artifact@v4
+        with:
+          name: bulla-image-${{ github.sha }}
+          path: dist
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # Pushed as an OCI artifact, not a runnable container: this is a raw UEFI
+      # disk image. `oras pull` fetches it; `docker run` is meaningless for it.
+      - name: Push the image to GHCR
+        run: |
+          set -euo pipefail
+          cd dist
+          oras push "ghcr.io/bulla-systems/bulla:${GITHUB_REF_NAME}" \
+            --artifact-type application/vnd.bulla.kernel-image.v1 \
+            --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --annotation "org.opencontainers.image.revision=${{ github.sha }}" \
+            --annotation "gay.dollspace.thermite.pin=${THERMITE_PIN}" \
+            --annotation "org.opencontainers.image.description=Bootable UEFI kernel image. Carries one certified exported function (kernel_step, L3); no kernel subsystem in it is verified." \
+            bulla.img:application/vnd.bulla.disk-image.raw \
+            bulla.receipt.json:application/vnd.bulla.receipt.v1+json

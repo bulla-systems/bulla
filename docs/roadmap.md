@@ -45,13 +45,16 @@ maximum.
 
 Either outcome is publishable. Neither should be claimed before it happens.
 
-## Free win, do it first
+## Free win — done
 
-The image build is already deterministic — two rebuilds compared,
-`SOURCE_DATE_EPOCH` pinned, fixed volume ID — and CI currently builds it, boots
-it, and throws it away.
+The image build is deterministic: `SOURCE_DATE_EPOCH` pinned, fixed volume ID,
+and two independent rebuilds compared byte-for-byte here rather than taken on
+the profile's word. Upstream CI built it, booted it, and threw it away.
 
-Publishing it (`upload-artifact`, then an OCI push to GHCR) is a handful of
-lines and makes the kernel `qemu-system-x86_64`-runnable by anyone. It is pure
-upside, it requires no verification work, and it is the single thing that makes
-the project legible to an outsider. It should land before T0.
+It is now published — `upload-artifact` on every run, an OCI push to
+`ghcr.io/bulla-systems/bulla` on tags — and
+[`docs/running.md`](running.md) makes it `qemu-system-x86_64`-runnable by someone
+with no Thermite installation. Evidence: [`docs/reproduction.md`](reproduction.md).
+
+This required no verification work and produced none. It is what makes the
+project legible to an outsider, and nothing more than that. **T0 is next.**

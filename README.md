@@ -9,11 +9,24 @@ verification-mandatory contract language.
 
 ---
 
-## Status: nothing is built yet
+## Status: an image that boots, carrying nothing proven
 
-This repository currently contains **a specification and a plan**. No kernel
-code has been written here. The [roadmap](docs/roadmap.md) marks tier T0 as the
-first buildable increment, and it is not started.
+There is now a bootable image here, reproduced from the upstream baseline and
+published. There is still **no verified kernel code**. Those are two different
+statements and the difference is the entire project.
+
+| | status |
+|---|---|
+| bootable image, built and booted here | **SHIPPED** — `dist/bulla.img`, six of six QEMU/OVMF scenarios, byte-identical across two builds ([evidence](docs/reproduction.md)) |
+| image published where an outsider can fetch and run it | **SHIPPED** — CI artifact and GHCR push ([how to run it](docs/running.md)) |
+| T0 — a verified kernel subsystem | **NOT STARTED** — blocker: none. It is next, and no language work is required ([MWE](docs/mwe-context.md)) |
+
+**The published image proves one thing: that `kernel_step` returns a positive
+number.** That is a single exported function whose body is a clock read through
+a boundary — a link-integrity probe, not a security property. Every subsystem in
+the image (scheduler, allocator, frame lifecycle, capability ledger, IRQ, DMA,
+SMP) is hand-written Rust and is **not verified**. The image carries exactly the
+assurance the upstream one did; reproducing and publishing it added none.
 
 This is stated plainly because the failure mode this project exists to avoid is
 describing architecture as though it were achievement. Every claim in these
@@ -77,6 +90,9 @@ The path is (1) → (2). (3) is a direction, not a destination.
 | [Roadmap](docs/roadmap.md) | T0–T4, with the blocker for each tier named |
 | [Language gaps](docs/language-gaps.md) | what Thermite cannot yet express, and what it would take |
 | [MWE: the privilege state machine](docs/mwe-context.md) | the first buildable increment, in full |
+| [Running the image](docs/running.md) | the exact `qemu-system-x86_64` invocation, and how to get OVMF |
+| [Upstream pin](docs/upstream-pin.md) | which Thermite commit, why that one, and how the build reaches it |
+| [Reproduction record](docs/reproduction.md) | what was run, on what, and what came out — including what did not work |
 | [Contributing](CONTRIBUTING.md) | the CI-vs-authoring enforcement split, and claims discipline |
 
 ## Relationship to prior work

@@ -20,8 +20,10 @@ This MWE replaces it with a claim that is:
 - **concretely falsifiable** — a wrong transition is a specific register state,
   not a stuck goal
 
-Source: port `thermite-kernel/src/context.rs` (193 lines, zero collections, zero
-generics, zero `unsafe`).
+Source: port [`kernel/src/context.rs`](../kernel/src/context.rs) — forked from
+upstream's `thermite-kernel/src/context.rs`. Confirmed against the forked file
+rather than the survey: 193 lines, zero collections, zero generics, zero
+`unsafe`.
 
 ## The claims
 
