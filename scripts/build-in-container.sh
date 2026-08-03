@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
-# Build the disk image inside the pinned container, so its bytes depend on the
-# source and the pin rather than on which machine ran the build.
+# Build inside the pinned container, so the result depends on the source and the
+# pin rather than on which machine ran the build.
 #
 # `make determinism` compares two builds on one host, which cannot catch
 # cross-host divergence by construction — it was green on both hosts while the
 # hosts disagreed. This is the target that can: run it on two different machines
 # and compare the digests.
 #
-# Scope: this runs the frozen platform image builder only, not `forge build`.
-# The determinism question is about the image bytes, and the proof closure, the
-# receipt and the QEMU gate do not contribute any. Running the acceptance matrix
-# inside an emulated amd64 container would nest TCG inside TCG for no added
-# evidence about byte-identity; the gate runs natively via `make boot-matrix`.
+# Two modes:
+#
+#   full (default) — runs scripts/build-image.sh inside the container, so the
+#     receipt, the proof closure and the QEMU gate all come from the pinned
+#     toolchain and the receipt's image_sha256 is the container image's. This is
+#     what CI publishes. On an x86-64 host it runs at native speed.
+#
+#   BULLA_CONTAINER_FAST=1 — runs the frozen platform image builder only. The
+#     image bytes are identical either way (forge shells out to the same
+#     builder), so this answers the determinism question without nesting TCG
+#     inside emulation. Use it on an arm64 host, where the full mode's six QEMU
+#     boots run under emulation.
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
@@ -21,6 +28,7 @@ IMAGE_TAG=${BULLA_BUILDER_TAG:-bulla-builder:pinned}
 ENGINE=${BULLA_CONTAINER_ENGINE:-docker}
 THERMITE_PIN=${THERMITE_PIN:-84d276e76ed02509ea58812efc15861d58580a42}
 THERMITE_REMOTE=${THERMITE_REMOTE:-https://github.com/dollspace-gay/Thermite.git}
+FAST=${BULLA_CONTAINER_FAST:-0}
 OUT=${1:-dist/bulla-container.img}
 
 if ! command -v "$ENGINE" >/dev/null; then
@@ -34,19 +42,9 @@ echo "==> building the builder image (linux/amd64)"
 
 mkdir -p "$(dirname "$OUT")"
 
-# The overlay is the same one scripts/build-image.sh performs: this repository's
-# forked platform/ and kernel/ placed where the pinned tree expects them.
-echo "==> building the disk image inside it"
-"$ENGINE" run --rm \
-    --platform linux/amd64 \
-    -v "$repo_root":/work \
-    -w /work \
-    -e THERMITE_PIN="$THERMITE_PIN" \
-    -e THERMITE_REMOTE="$THERMITE_REMOTE" \
-    -e SOURCE_DATE_EPOCH=1704067200 \
-    -e TZ=UTC \
-    "$IMAGE_TAG" \
-    bash -euo pipefail -c '
+if [[ "$FAST" == "1" ]]; then
+    echo "==> building the disk image inside it (frozen builder only)"
+    inner='
         clone=/work/.build-container/thermite
         mkdir -p "$(dirname "$clone")"
         if [ ! -d "$clone/.git" ]; then mkdir -p "$clone"; git -C "$clone" init --quiet; fi
@@ -64,6 +62,22 @@ echo "==> building the disk image inside it"
         cd "$clone"
         ./platform/x86_64-pc-uefi-smp-v1/build-image.sh /work/'"$OUT"'
     '
+else
+    echo "==> building through forge inside it (receipt, proof closure, QEMU gate)"
+    inner='./scripts/build-image.sh '"$OUT"''
+fi
+
+"$ENGINE" run --rm \
+    --platform linux/amd64 \
+    -v "$repo_root":/work \
+    -w /work \
+    -e THERMITE_PIN="$THERMITE_PIN" \
+    -e THERMITE_REMOTE="$THERMITE_REMOTE" \
+    -e BULLA_BUILD_ROOT=/work/.build-container \
+    -e SOURCE_DATE_EPOCH=1704067200 \
+    -e TZ=UTC \
+    "$IMAGE_TAG" \
+    bash -euo pipefail -c "$inner"
 
 echo
 echo "==> built in container:"

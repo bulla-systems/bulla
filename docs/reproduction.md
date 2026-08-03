@@ -126,9 +126,19 @@ recorded pin, built through `Containerfile` at
 **What still cannot:** reproducibility without the container is unchanged. A
 build on a bare host still depends on that host's toolchain build, so
 `make image` remains host-deterministic and only `make image-container` carries
-the cross-host property. The published artifact is currently the host-native
-build, not the container build; moving publication onto the container output is
-a separate change.
+the cross-host property.
+
+### Publication uses the container build
+
+The artifact pushed to GHCR is the container build, together with the receipt
+produced alongside it. The publish job checks that the receipt's `image_sha256`
+is the digest of the image beside it before pushing, since a receipt naming
+different bytes than its image is an unverifiable pairing.
+
+Three annotations carry what a consumer needs to re-derive the bytes: the Bulla
+revision, the Thermite pin, and the builder image digest. `v0.1.1-alpha.1`
+predates this change and carries the host-native image `2ef4fdad…`, which is
+reproducible only on the machine that built it.
 
 ### Determinism
 

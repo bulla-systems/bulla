@@ -36,6 +36,24 @@ That gives you `bulla.img` and `bulla.receipt.json` in the current directory.
 This is a raw disk image stored in a registry, not a container image, so
 `docker run` does not apply to it.
 
+The published image is the one built through the digest-pinned toolchain in
+[`Containerfile`](../Containerfile), so you can re-derive its bytes yourself from
+three things, all recorded on the artifact as annotations:
+
+```sh
+oras manifest fetch --pretty ghcr.io/bulla-systems/bulla:<tag> \
+  | grep -E 'revision|thermite.pin|builder.base'
+```
+
+- `org.opencontainers.image.revision` — the Bulla commit
+- `gay.dollspace.thermite.pin` — the upstream Thermite commit
+- `systems.bulla.builder.base` — the builder image digest
+
+Checking out that revision and running `make image-container` reproduces the
+digest on any machine. A plain `make image` will not: it builds against whatever
+toolchain the host has, which produces different bytes on different machines
+([docs/reproduction.md](reproduction.md)).
+
 While this repository is private the package is too, and the pull needs
 credentials carrying `read:packages`. The `repo` scope does not cover GHCR, so a
 token without it gets `denied` even with full access to this repository:

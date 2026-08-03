@@ -90,26 +90,29 @@ jobs:
       - name: Boot the acceptance matrix
         run: make boot-matrix
 
-      # The host-deterministic result in docs/reproduction.md is what this
-      # answers: two builds on one machine cannot detect cross-host divergence,
-      # and were green on both hosts while the hosts disagreed. Building inside
-      # the digest-pinned container makes the digest depend on the source and
-      # the pin instead of on the runner. It runs the frozen image builder only,
-      # since the proof closure and the QEMU gate contribute no image bytes.
+      # The published artifact. Two builds on one machine cannot detect
+      # cross-host divergence, and were green on both hosts while the hosts
+      # disagreed; building through the digest-pinned toolchain makes the image
+      # depend on the source and the pin rather than on the runner. The full
+      # path runs here, so the receipt's image_sha256 is this image's.
       - name: Build inside the pinned container
         run: |
           set -euo pipefail
           make image-container IMAGE=dist/bulla-container.img
+          base=$(grep -oE 'sha256:[0-9a-f]{64}' Containerfile | head -1)
+          echo "BUILDER_BASE_DIGEST=$base" >> "$GITHUB_ENV"
           {
-            echo "### Container build"
+            echo "### Published image (container build)"
             echo
             echo '```'
             echo "sha256  $(sha256sum dist/bulla-container.img | cut -d' ' -f1)"
-            echo "base    rust@sha256:6f9e63259f12e1e599296f5ecfed2bae46de4af0ee0525dd8b89c046e236d5c5"
+            echo "builder rust@$base"
+            echo "pin     ${THERMITE_PIN}"
             echo '```'
             echo
-            echo "Compare against the same target run on another machine. Matching"
-            echo "digests are the cross-host claim; two builds on one host are not."
+            echo "Reproduce with the source at this commit, the pin, and that"
+            echo "builder digest. The host-native build above is a different"
+            echo "image and is not reproducible across machines."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record what the artifact is
@@ -135,8 +138,11 @@ jobs:
           name: bulla-image-${{ github.sha }}
           path: |
             dist/bulla.img
-            dist/bulla-container.img
             dist/bulla.receipt.json
+            dist/bulla-container.img
+            dist/bulla-container.receipt.json
+            dist/bulla-container.sections
+            dist/bulla-container.symbols
             dist/bulla.sections
             dist/bulla.symbols
             dist/boot-evidence/
@@ -176,17 +182,42 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      # The container build is what gets published, so a consumer can re-derive
+      # the bytes from the source, the pin, and the builder digest. The
+      # host-native build in the same artifact is a different image and is
+      # reproducible only on the machine that made it (docs/reproduction.md).
+      # It is republished under the plain names docs/running.md uses.
+      - name: Stage the container build for publication
+        run: |
+          set -euo pipefail
+          test -s dist/bulla-container.img
+          test -s dist/bulla-container.receipt.json
+          mkdir -p publish
+          cp dist/bulla-container.img         publish/bulla.img
+          cp dist/bulla-container.receipt.json publish/bulla.receipt.json
+          base=$(grep -oE 'sha256:[0-9a-f]{64}' Containerfile | head -1)
+          echo "BUILDER_BASE_DIGEST=$base" >> "$GITHUB_ENV"
+          # The receipt binds the image it was produced with. Publishing a
+          # receipt that names different bytes than the image beside it would be
+          # an unverifiable pairing, so it is checked rather than assumed.
+          img=$(sha256sum publish/bulla.img | cut -d' ' -f1)
+          named=$(python3 -c "import json;print(json.load(open('publish/bulla.receipt.json'))['image_sha256'])")
+          echo "image  $img"
+          echo "receipt names $named"
+          test "$img" = "$named"
+
       # Pushed as an OCI artifact rather than a runnable container: this is a raw
       # UEFI disk image. `oras pull` fetches it; `docker run` does not apply.
       - name: Push the image to GHCR
         run: |
           set -euo pipefail
-          cd dist
+          cd publish
           oras push "ghcr.io/bulla-systems/bulla:${GITHUB_REF_NAME}" \
             --artifact-type application/vnd.bulla.kernel-image.v1 \
             --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
             --annotation "org.opencontainers.image.revision=${{ github.sha }}" \
             --annotation "gay.dollspace.thermite.pin=${THERMITE_PIN}" \
-            --annotation "org.opencontainers.image.description=Bootable UEFI kernel image. Carries one certified exported function (kernel_step, L3). No kernel subsystem in it is verified." \
+            --annotation "systems.bulla.builder.base=rust@${BUILDER_BASE_DIGEST}" \
+            --annotation "org.opencontainers.image.description=Bootable UEFI kernel image, built through the digest-pinned toolchain in Containerfile. Carries one certified exported function (kernel_step, L3). No kernel subsystem in it is verified." \
             bulla.img:application/vnd.bulla.disk-image.raw \
             bulla.receipt.json:application/vnd.bulla.receipt.v1+json
