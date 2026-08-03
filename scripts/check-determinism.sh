@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Build the image twice from a clean overlay and compare the two byte for byte.
 #
-# profile.toml claims `deterministic_rebuilds = 2`. forge also sets
-# `reproducible_pair_checked` in its own receipt. This target exists so the claim
-# is confirmed from outside rather than read back from the artifact that asserts
-# it — a receipt that says an image is reproducible is not evidence that it is.
+# profile.toml claims `deterministic_rebuilds = 2`, and forge sets
+# `reproducible_pair_checked` in its own receipt. This target checks the claim
+# from outside rather than reading it back from the artifact that asserts it,
+# since a receipt saying an image is reproducible is not evidence that it is.
+#
+# The result is host-scoped: two builds on one machine match, and two builds on
+# different machines do not. See docs/reproduction.md.
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
@@ -33,9 +36,9 @@ echo "build 1: $one"
 echo "build 2: $two"
 
 if cmp -s "$work/build-1.img" "$work/build-2.img"; then
-    echo "IDENTICAL — two independent builds produced the same 67108864 bytes"
+    echo "IDENTICAL: two independent builds produced the same 67108864 bytes"
 else
-    echo "DIFFER — the deterministic_rebuilds = 2 claim does not hold here" >&2
+    echo "DIFFER: the deterministic_rebuilds = 2 claim does not hold here" >&2
     cmp "$work/build-1.img" "$work/build-2.img" || true
     exit 1
 fi

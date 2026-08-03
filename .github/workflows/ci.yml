@@ -20,7 +20,7 @@ env:
 
 jobs:
   # Adapted from the `kernel-image` job in Thermite's .github/workflows/ci.yml at
-  # the pin. Two differences that matter:
+  # the pin. Two differences:
   #
   #   - Upstream builds forge from the checkout it is already in. Bulla is a
   #     consumer, and forge resolves the platform profile and its output path
@@ -48,7 +48,7 @@ jobs:
           qemu-system-x86_64 --version
           llvm-pdbutil --version
           # The acceptance harness needs a matched OVMF code/vars pair in one of
-          # its search roots. Record which layout this runner actually has, so a
+          # its search roots. Record which layout this runner has, so a
           # firmware-discovery failure is legible rather than a bare exception.
           ls -l /usr/share/OVMF/ || true
 
@@ -103,8 +103,8 @@ jobs:
             echo '```'
             echo
             echo "Assurance carried: one exported function, \`kernel_step\`, certified"
-            echo "at L3 — \`ens result > 0\` against a clock-read boundary. That is the"
-            echo "whole of it. No kernel subsystem in this image is verified."
+            echo "at L3 against \`ens result > 0\` through a clock-read boundary. No"
+            echo "kernel subsystem in this image is verified."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the image
@@ -153,8 +153,8 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      # Pushed as an OCI artifact, not a runnable container: this is a raw UEFI
-      # disk image. `oras pull` fetches it; `docker run` is meaningless for it.
+      # Pushed as an OCI artifact rather than a runnable container: this is a raw
+      # UEFI disk image. `oras pull` fetches it; `docker run` does not apply.
       - name: Push the image to GHCR
         run: |
           set -euo pipefail
@@ -164,6 +164,6 @@ jobs:
             --annotation "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
             --annotation "org.opencontainers.image.revision=${{ github.sha }}" \
             --annotation "gay.dollspace.thermite.pin=${THERMITE_PIN}" \
-            --annotation "org.opencontainers.image.description=Bootable UEFI kernel image. Carries one certified exported function (kernel_step, L3); no kernel subsystem in it is verified." \
+            --annotation "org.opencontainers.image.description=Bootable UEFI kernel image. Carries one certified exported function (kernel_step, L3). No kernel subsystem in it is verified." \
             bulla.img:application/vnd.bulla.disk-image.raw \
             bulla.receipt.json:application/vnd.bulla.receipt.v1+json

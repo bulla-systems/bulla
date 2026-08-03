@@ -5,37 +5,35 @@
 Most friction in agent-assisted repositories comes from conflating two things
 that are not the same:
 
-| | **CI enforcement** | **authoring-time enforcement** |
+| | CI enforcement | authoring-time enforcement |
 |---|---|---|
 | runs on | the merge candidate | one contributor's editing loop |
 | posture | adversarial | formative |
-| harness | **must be agnostic** | inherently specific |
+| harness | must be agnostic | inherently specific |
 | blocks merge | yes | no |
-| bears trust | **yes** | never |
+| bears trust | yes | never |
 
-**The rule:**
+The rule:
 
-> Anything load-bearing for a trust claim must be CI-enforced and
-> harness-agnostic. Authoring-time tooling may exist, may be opinionated, and
-> may be the project default — but it may **never** be cited as the reason a
-> property holds.
+> Anything a trust claim depends on must be CI-enforced and harness-agnostic.
+> Authoring-time tooling may exist, may be opinionated, and may be the project
+> default. It may not be cited as the reason a property holds.
 
-This repository is free to be opinionated about which authoring-time tools it
-supports and ships defaults for. That is a separate question from what
-determines trust, and keeping them separate is what makes contribution possible
-for someone running a different setup — or none.
+This repository can be opinionated about which authoring-time tools it supports
+and ships defaults for. That is a separate question from what determines trust,
+and keeping the two apart is what lets someone contribute from a different setup,
+or none.
 
 ### Why this is a rule and not a preference
 
 The failure mode is documented. In the upstream Thermite repository, two
-agent-facing gates were implemented as editor hooks in a tracked-but-
-machine-authored config file. A routine tool re-run silently removed them. They
-were dormant for an entire development stage while the README, the design docs,
-and four agent definitions all continued asserting they fired.
+agent-facing gates were implemented as editor hooks in a tracked but
+machine-authored config file. A routine tool re-run removed them. They were
+dormant for an entire development stage while the README, the design docs, and
+four agent definitions continued to assert that they fired.
 
-Nobody lied. The enforcement claim was simply attached to a mechanism that could
-disappear without any signal — and no contributor on a different harness would
-have had it in the first place.
+The enforcement claim was attached to a mechanism that could disappear without a
+signal, and that no contributor on a different harness would have had.
 
 ## The targets
 
@@ -54,12 +52,12 @@ no agent tooling satisfies every requirement by running these:
 ## Practical consequences
 
 - Every trust-bearing check is a target in the build file and runs in CI.
-- Editor hooks and agent harness config, if present, **shell out to those
-  targets** rather than reimplementing them.
-- A contributor running no agent tooling can satisfy every requirement by
-  running the build targets.
-- If a check cannot be expressed as a CI target, it is not a requirement. It is
-  advice, and it goes in a document rather than a gate.
+- Editor hooks and agent harness config, where present, shell out to those
+  targets rather than reimplementing them.
+- A contributor running no agent tooling satisfies every requirement by running
+  the build targets.
+- A check that cannot be expressed as a CI target is advice rather than a
+  requirement, and goes in a document rather than a gate.
 
 ## Claims discipline
 
@@ -67,22 +65,27 @@ From [the assurance model](docs/assurance-model.md):
 
 > Any assurance statement in this repository must be reducible to a set of
 > per-clause tuples with named boundaries. A prose summary that cannot be
-> expanded into tuples is not a claim; it is marketing.
+> expanded into tuples is not a claim.
 
 Applies to the README, release notes, commit messages, and anything said about
 the project elsewhere.
 
 ## Status vocabulary
 
-Requirements are **binary**:
+Requirements are binary:
 
-- **SHIPPED** — end-to-end functional, with a non-test consumer, tests, and
+- **SHIPPED**: end-to-end functional, with a non-test consumer, tests, and
   verification evidence. Cite the symbol and the test.
-- **NOT STARTED** — with a concrete open prerequisite named.
+- **NOT STARTED**: with a concrete open prerequisite named.
 
-There is deliberately no "in progress," "partial," or "mostly done." Those are
-where overclaiming lives: they let architecture be reported as achievement. Work
-underway lives in the process log (see below), not in the status table.
+There is no "in progress", "partial", or "mostly done". Those are where
+overclaiming lives, since they let architecture be reported as achievement. Work
+underway belongs in the process log described below, rather than the status
+table.
+
+These two labels are vocabulary rather than emphasis. A [tone
+pass](docs/tone-and-voice.md) does not soften them into a hedge or introduce a
+third category by wording.
 
 ## Process and memory tooling
 
@@ -96,10 +99,30 @@ cargo install day --version 0.9.0-beta.1
 day doctor          # prints the supported kan range against the kan you have
 ```
 
-The versions are load-bearing. `day` 0.9.0-beta.1 supports exactly `0.9.1..=0.9.1`
-of kan; a bare `cargo install kan` picks a release outside that range and `day`
-cannot talk to it. `day doctor` prints the range and what you have — run it.
+The versions matter. `day` 0.9.0-beta.1 supports kan `0.9.1..=0.9.1`, and a bare
+`cargo install kan` picks a release outside that range that `day` cannot talk to.
+`day doctor` prints the supported range alongside the kan you have.
 
-This is **authoring-time tooling under the rule above** — it structures how work
+This is authoring-time tooling under the rule above. It structures how work
 proceeds and is not a trust-bearing gate. A contributor who does not use it can
-still land changes; they just will not have the process log.
+still land changes; they will not have the process log.
+
+`.claude/settings.json` wires `day hook session-start`, so the teloi, their
+tensions, and the project's practice claims are injected at the top of an agent
+session. The standard in [docs/tone-and-voice.md](docs/tone-and-voice.md) is
+carried that way: its short form lives on the `practice` subject in kan and is
+projected into every session.
+
+To add or revise a practice claim:
+
+```bash
+kan observe "<the practice, under ~280 characters>" --subject practice
+kan retract <cid>          # to withdraw one
+kan publish practice       # to share it in .claims/
+```
+
+Claims longer than about 280 characters are truncated in the injected block, so
+keep each one to a single point and put the full argument in a document.
+
+Nothing here blocks a merge. The hook prints advisory context and does not fail a
+build, which keeps it on the authoring-time side of the split.

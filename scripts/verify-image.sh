@@ -2,8 +2,8 @@
 # Re-check a built image against its receipt.
 #
 # Like the build, `forge verify-build` resolves the platform profile from its own
-# compile-time workspace root, so it runs inside the overlaid clone rather than
-# here. See docs/upstream-pin.md.
+# compile-time workspace root, so it runs inside the overlaid clone. See
+# docs/upstream-pin.md.
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)

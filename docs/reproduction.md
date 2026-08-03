@@ -1,94 +1,85 @@
 # Reproduction record
 
-What was run, on what, and what came out. This records a **reproduction of the
-upstream baseline**, not a new result. No verification was added: the image's
-proof content is the single exported function it had upstream.
+What was run, on what, and what came out. This records a reproduction of the
+upstream baseline. No verification was added: the image's proof content is the
+single exported function it had upstream.
 
 Date: 2026-08-02. Upstream pin: `84d276e76ed02509ea58812efc15861d58580a42`.
 
-## Host
+## Hosts
 
-| | |
-|---|---|
-| machine | Darwin 25.5.0, arm64 (Apple silicon) |
-| rustc | 1.95.0, with `x86_64-unknown-uefi` |
-| Verus | 0.2026.05.24.ecee80a (`arm64-macos`) |
-| QEMU | 11.0.3 (Homebrew), TCG emulating x86-64 on arm64 |
-| firmware | `edk2-x86_64-code.fd` + `edk2-i386-vars.fd` from Homebrew QEMU |
-| image tools | dosfstools, mtools, LLVM 22.1.8, GNU coreutils |
-| Python | 3.12.13 |
-
-This is not the CI host. CI runs `ubuntu-latest` on x86-64. The results below are
-from the macOS/arm64 host; CI results will appear on the workflow run.
+| | development host | CI |
+|---|---|---|
+| machine | Darwin 25.5.0, arm64 | ubuntu-24.04, x86-64 |
+| rustc | 1.95.0, with `x86_64-unknown-uefi` | 1.95.0, with `x86_64-unknown-uefi` |
+| Verus | 0.2026.05.24.ecee80a (`arm64-macos`) | 0.2026.05.24.ecee80a (`x86-linux`) |
+| QEMU | 11.0.3 (Homebrew), TCG emulating x86-64 on arm64 | distribution QEMU, TCG |
+| firmware | `edk2-x86_64-code.fd` + `edk2-i386-vars.fd` from Homebrew QEMU | `OVMF_CODE_4M.fd` + `OVMF_VARS_4M.fd` |
+| image tools | dosfstools, mtools, LLVM 22.1.8, GNU coreutils | dosfstools, mtools, distribution LLVM |
+| Python | 3.12.13 | 3.12 |
 
 ## Results
 
-Run on two hosts. Both are green; they do **not** produce the same image.
-
-| step | macOS / arm64 | CI: ubuntu-24.04 / x86-64 |
+| step | development host | CI |
 |---|---|---|
-| `make check-fork` | **pass** — 34 files, 33 byte-identical to the pin, 1 declared divergence | **pass** |
-| `forge build --target kernel-image` | **pass** — 67108864 bytes | **pass** |
-| `forge verify-build --json` | **pass** — `"valid": true` | **pass** |
-| determinism, two builds compared | **pass** — byte-identical | **pass** — byte-identical |
-| QEMU matrix, 6 scenarios | **pass** — all 6 | **pass** — all 6 |
-| `docs/running.md` followed end to end | **pass** — booted from a clean directory | not run there |
+| `make check-fork` | pass: 34 files, 33 byte-identical to the pin, 1 declared divergence | pass |
+| `forge build --target kernel-image` | pass: 67108864 bytes | pass |
+| `forge verify-build --json` | pass: `"valid": true` | pass |
+| determinism, two builds compared | pass: byte-identical | pass: byte-identical |
+| QEMU matrix, 6 scenarios | 6 of 6 | 6 of 6 |
+| `docs/running.md` followed end to end | pass, from a clean directory | not run |
 
 CI run: [30779676660](https://github.com/bulla-systems/bulla/actions/runs/30779676660), 4m06s.
 
-### The image, and the limit of the determinism claim
+### Image digests
 
 ```
-macOS / arm64        e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
-ubuntu-24.04 / x86-64  2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
-both                 67108864 bytes
+development host  e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
+CI                2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
+both              67108864 bytes
 ```
 
-**These differ, and that is the most important result on this page.** The
-`deterministic_rebuilds = 2` claim in `profile.toml` holds *on a given host* —
-two builds are byte-identical, twice over, on two different hosts. It does not
-hold *across* hosts. Cross-compiling to `x86_64-unknown-uefi` from an
-`aarch64-apple-darwin` toolchain and from an `x86_64-unknown-linux-gnu` toolchain
-produces different PE bytes, even at the same pinned Rust channel, the same
-`SOURCE_DATE_EPOCH`, and the same volume ID.
+The two hosts produce different images. `deterministic_rebuilds = 2` in
+`profile.toml` holds on a given host: two builds are byte-identical, on each of
+the two hosts. It does not hold across hosts. Cross-compiling to
+`x86_64-unknown-uefi` from an `aarch64-apple-darwin` toolchain and from an
+`x86_64-unknown-linux-gnu` toolchain produces different PE bytes at the same
+pinned Rust channel, the same `SOURCE_DATE_EPOCH`, and the same volume ID.
 
-So the honest statement is: **the build is host-deterministic, not
-reproducible.** Anyone re-deriving a published image must match the build host,
-not just the source and the pin. Nothing upstream claimed otherwise — the profile
-says `deterministic_rebuilds`, not "reproducible" — but the distinction is easy
-to read past, and `docs/architecture.md` did read past it before this pass.
+The build is host-deterministic. Re-deriving a published image requires matching
+the build host as well as the source and the pin. The profile says
+`deterministic_rebuilds` rather than "reproducible", so upstream claimed no more
+than this; `docs/architecture.md` had read it as the stronger property, and has
+been corrected.
 
-Both digests are stable: on each host, two independent builds from a clean
-checkout of the pin, a fresh overlay, and a fresh `forge` produced the same
-bytes. Within the macOS host, an image built from Bulla's forked tree and one
-built from the **unmodified pin** also match — the one declared divergence is in
-`test-qemu.py`, which is not an input to the image.
-
-Narrowing this gap is real work and is not part of this pass. The likely levers
-are `--remap-path-prefix`, a pinned linker, and a container-fixed toolchain.
+Narrowing the gap is separate work and is not part of this pass. The likely
+levers are `--remap-path-prefix`, a pinned linker, and a container-fixed
+toolchain.
 
 ### Determinism
 
-`profile.toml` claims `deterministic_rebuilds = 2`, and forge's own receipt sets
-`reproducible_pair_checked: true`. Both were confirmed from outside rather than
-read back, because a receipt asserting that an image is reproducible is not
-evidence that it is. Two full builds per host — each from a clean checkout of the
-pin, a fresh overlay, and a fresh `forge`:
+`profile.toml` claims `deterministic_rebuilds = 2`, and forge's receipt sets
+`reproducible_pair_checked: true`. Both were checked from outside, since a
+receipt asserting that an image is reproducible is not evidence that it is. Two
+full builds per host, each from a clean checkout of the pin, a fresh overlay, and
+a fresh `forge`:
 
 ```
-macOS / arm64          build 1: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
-                       build 2: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
-ubuntu-24.04 / x86-64  build 1: 2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
-                       build 2: 2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
+development host  build 1: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
+                  build 2: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
+CI                build 1: 2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
+                  build 2: 2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
 ```
 
-Identical within each host, different between them. See above.
+On the development host, an image built from Bulla's forked tree and one built
+from the unmodified pin also match. The one declared divergence is in
+`test-qemu.py`, which is not an input to the image.
 
 ### QEMU/OVMF acceptance matrix
 
-All six scenarios passed, ending in `THERMITE_SUCCESS gate=boot-smp-v1`, with
-`THERMITE_QEMU_MATRIX_SUCCESS cpus=1,2,4,8`. Per-scenario transcript digests as
-bound into the receipt:
+Six of six scenarios passed, each ending in `THERMITE_SUCCESS gate=boot-smp-v1`,
+with `THERMITE_QEMU_MATRIX_SUCCESS cpus=1,2,4,8`. Per-scenario transcript digests
+as bound into the receipt:
 
 | CPUs | scenario | observed | transcript sha256 |
 |---|---|---|---|
@@ -99,9 +90,9 @@ bound into the receipt:
 | 4 | ap-start-failure | `apic_id=3 state=Failed reason=injected online=3` | `c85bcba13681e509738a1d5ed22a8238c6917a4936c1893c6c2211027c1b65dd` |
 | 2 | reboot | `action=reboot terminal=1` | `7e1b5180c0b43d32f0698ebc16820877fef4c21c33f79b6b001158539b59c4b5` |
 
-No scenario was skipped, and none failed.
+No scenario was skipped.
 
-### What `verify-build` actually checked
+### What `verify-build` checked
 
 ```json
 {
@@ -117,10 +108,34 @@ No scenario was skipped, and none failed.
 ```
 
 Note `"replayed": false`. Without `--replay`, `verify-build` re-checks the
-receipt's bindings and re-derives the proof evidence from current source; it does
-**not** rebuild the image or re-boot it. The reproducibility result above comes
-from `make determinism`, which is a separate thing. `docs/architecture.md`
-previously ran those two together; it has been corrected.
+receipt's bindings and re-derives the proof evidence from current source. It does
+not rebuild the image or re-boot it. The determinism result above comes from
+`make determinism`, which is a separate check. `docs/architecture.md` previously
+ran the two together and has been corrected.
+
+### The published artifact was fetched and booted
+
+The CI artifact was downloaded onto the development host, which did not build it,
+and booted there by following [`docs/running.md`](running.md): 67108864 bytes,
+digest `2ef4fdad…` matching CI's, ending in `THERMITE_SUCCESS gate=boot-smp-v1`.
+Upstream built this image and discarded it; keeping and publishing it is what
+this pass adds.
+
+The GHCR push ran on tag `v0.1.1-alpha.1`
+([run 30821149593](https://github.com/bulla-systems/bulla/actions/runs/30821149593)):
+
+```
+Uploaded  2ef4fdad0bef bulla.img
+Pushed [registry] ghcr.io/bulla-systems/bulla:v0.1.1-alpha.1
+ArtifactType: application/vnd.bulla.kernel-image.v1
+Digest: sha256:178487ec2ba17f66aba803eca23deb51792488bef1d395ba842d223745ce056e
+```
+
+The blob digest matches the image built and booted on both hosts. Fetching it
+back has not been done: the package is private while the repository is, and the
+development host's token lacks `read:packages`, so `oras manifest fetch` returns
+`denied`. The push is evidenced by the registry's response to it. A round-trip
+pull is not yet evidenced.
 
 ## Assurance carried
 
@@ -135,87 +150,78 @@ One clause, on one exported function, whose implementation is a boundary call to
 `tpl_clock_read`. `to_platform` because the body is a frozen registry entry.
 `solver` because Verus discharged it and nothing re-checked the solver.
 
-Everything else in the image — scheduler, allocator, frame lifecycle, capability
-ledger, IRQ, DMA, SMP — is hand-written Rust with `none / none / fiat` and no
-proof obligation at all. The boot transcript's `THERMITE_MODEL` line reports
-those models *executing*, which is a test, not a proof.
+The rest of the image, covering the scheduler, allocator, frame lifecycle,
+capability ledger, IRQ, DMA and SMP, is hand-written Rust with
+`none / none / fiat` and no proof obligation. The boot transcript's
+`THERMITE_MODEL` line reports those models executing, which is a test result.
 
-**This pass added no verification.** T0 in [the roadmap](roadmap.md) is where
-that starts, and it is NOT STARTED.
+This pass added no verification. T0 in [the roadmap](roadmap.md) is where that
+starts, and it is NOT STARTED.
 
-### The published artifact was fetched and booted
+## Problems found
 
-Not just built and uploaded — the CI artifact was downloaded onto the
-macOS/arm64 host, which did not build it, and booted there by following
-[`docs/running.md`](running.md) verbatim: 67108864 bytes, digest `2ef4fdad…`
-matching CI's, ending in `THERMITE_SUCCESS gate=boot-smp-v1`. That is the whole
-point of the pass — upstream built this image and discarded it.
+### 1. forge's kernel-image target runs only from its own workspace
 
-## Problems found, and what was done about them
+`forge build --target kernel-image` resolves the platform profile directory and
+its relative output path against forge's compile-time workspace root
+(`env!("CARGO_MANIFEST_DIR")/..`). There is no `--profile-root`, and `--platform`
+selects a name that is then checked against a compiled-in constant.
 
-### 1. forge's kernel-image target only works from its own workspace
+Two checks:
 
-`forge build --target kernel-image` resolves the platform profile directory
-*and* its relative output path against forge's compile-time workspace root
-(`env!("CARGO_MANIFEST_DIR")/..`). There is no `--profile-root`, and the
-`--platform` flag only selects a name, which is then checked against a compiled-in
-constant.
-
-Checked twice, both decisive:
-
-- With Bulla's `platform/` directory renamed away entirely, the documented build
-  command still got past profile resolution and failed only on a missing host
-  tool — it was reading the *other* checkout's copy.
+- With Bulla's `platform/` directory renamed away, the documented build command
+  still got past profile resolution and failed on a missing host tool. It was
+  reading the other checkout's copy.
 - Invoked from Bulla with `--out dist/bulla.img`, it wrote the image, the EFI
-  binary, the PDB and the receipt into `<thermite-clone>/dist/` and then failed
+  binary, the PDB and the receipt into `<thermite-clone>/dist/`, then failed
   reading them back from Bulla's `dist/`.
 
-So a fork of the platform layer is not the thing that gets built unless it is
-placed inside the pinned checkout. `scripts/build-image.sh` does that in a
-scratch clone. **This is a workaround for a missing upstream flag, not a design**,
-and the clean fix — a `--profile-root` option — belongs upstream in Thermite.
+A fork of the platform layer is therefore not the thing that gets built unless it
+is placed inside the pinned checkout. `scripts/build-image.sh` does that in a
+scratch clone. It is a workaround for a missing upstream flag; the fix is a
+`--profile-root` option, which belongs upstream in Thermite.
 
-### 2. The acceptance harness cannot find firmware outside three Linux paths
+### 2. The acceptance harness finds firmware only under three Linux paths
 
-`test-qemu.py` searched only `/usr/share/edk2/ovmf`, `/usr/share/OVMF`, and
-`/usr/share/qemu`. On macOS all three are under SIP and cannot even be created,
-so the gate could not run at all regardless of whether QEMU and OVMF were
-installed. Arch Linux's `/usr/share/edk2/x64/` is also outside the list.
+`test-qemu.py` searched `/usr/share/edk2/ovmf`, `/usr/share/OVMF`, and
+`/usr/share/qemu`. On macOS all three are under SIP and cannot be created, so the
+gate could not run whether or not QEMU and OVMF were installed. Arch Linux's
+`/usr/share/edk2/x64/` is also outside the list.
 
-Bulla's copy adds a `BULLA_OVMF_DIR` root ahead of the three. That is the fork's
-one declared divergence. It changes firmware *discovery* and nothing else — the
-pairs, the QEMU command line, and every transcript assertion are untouched, so a
-gate that passes here passes upstream. Worth upstreaming.
+Bulla's copy adds a `BULLA_OVMF_DIR` root ahead of the three, which is the fork's
+one declared divergence. It changes firmware discovery. The pairs, the QEMU
+command line, and every transcript assertion are untouched, so a gate that passes
+here passes upstream. Worth upstreaming.
 
-### 3. The harness needs Python 3.10+, undeclared
+### 3. The harness requires Python 3.10 or newer, undeclared
 
 `test-qemu.py` calls `Path.write_text(..., newline=...)`, added in Python 3.10.
-Under macOS's system Python 3.9 the first scenario boots successfully and then
-dies with `TypeError: write_text() got an unexpected keyword argument 'newline'`
-while writing its log — a passing boot reported as a failure. `ubuntu-latest` has
-3.12, so upstream CI never sees it. Recorded in `docs/running.md`.
+Under macOS's system Python 3.9 the first scenario boots and then fails with
+`TypeError: write_text() got an unexpected keyword argument 'newline'` while
+writing its log, reporting a passing boot as a failure. `ubuntu-latest` has 3.12,
+so upstream CI does not see it. Recorded in `docs/running.md`.
 
-### 4. Two defects that only CI could find
+### 4. Two defects that only CI surfaced
 
-Both are in this repository's own scripts, and both passed every local run:
+Both are in this repository's own scripts, and both passed every local run.
 
-- **`oras` is not in Ubuntu's archives.** The first CI run died at the first
-  apt step. It is only needed by the tag-gated publish job, and now installs
-  there from its release tarball.
-- **`git clone` refuses a non-empty destination, and the cache makes it
-  non-empty.** `Swatinem/rust-cache` restores `.build/thermite/target` before
-  the build scripts run, so the directory exists without a `.git` and the clone
-  aborts. **The first CI run passed only because the cache was cold; the next
-  one failed.** Both scripts now init-and-fetch, which works from either state.
+- `oras` is not in Ubuntu's archives. The first CI run failed at the apt step. It
+  is needed only by the tag-gated publish job, and now installs there from its
+  release tarball.
+- `git clone` refuses a non-empty destination, and the cache makes the
+  destination non-empty. `Swatinem/rust-cache` restores `.build/thermite/target`
+  before the build scripts run, so the directory exists without a `.git` and the
+  clone aborts. The first CI run passed because the cache was cold; the next one
+  failed. Both scripts now init-and-fetch, which works from either state.
 
-The second is the instructive one. A green first run was not evidence that the
-script worked, and no amount of local testing starting from a clean tree would
-have caught it — the failure requires the state the previous success created.
+The second is worth remembering: a green first run was not evidence that the
+script worked, and local testing from a clean tree could not have caught it,
+because the failure requires the state the previous success created.
 
-### 5. `registry.toml` points at a path this repository does not have
+### 5. `registry.toml` names a path this repository does not have
 
 The forked `registry.toml` says `registry_source = "thermite-kernel/src/registry.rs"`.
-Here that file is `kernel/src/registry.rs`. It is left as-is deliberately: the
-string is correct at build time, because `scripts/build-image.sh` overlays
-`kernel/` back onto `thermite-kernel/` in the clone, and editing it would add a
-second divergence for no gain. Noted rather than changed.
+Here that file is `kernel/src/registry.rs`. It is left unchanged: the string is
+correct at build time, since `scripts/build-image.sh` overlays `kernel/` back
+onto `thermite-kernel/` in the clone, and editing it would add a second
+divergence for no gain.

@@ -4,17 +4,17 @@
 #
 # Why this script exists rather than a bare `forge build`:
 #
-#   `forge build --target kernel-image` resolves BOTH the platform profile
-#   directory and its relative output path against forge's own compile-time
-#   workspace root (`env!("CARGO_MANIFEST_DIR")/..` in forge/src/kernel_image.rs).
-#   Not the current directory, and not a flag — there is no --profile-root.
-#   Run from anywhere else, it reads some other tree's platform/ and writes the
-#   image into some other tree's dist/. It only works with the working directory
-#   set to the checkout forge was compiled in, which is what upstream CI does.
+#   `forge build --target kernel-image` resolves the platform profile directory
+#   and its relative output path against forge's own compile-time workspace root
+#   (`env!("CARGO_MANIFEST_DIR")/..` in forge/src/kernel_image.rs), rather than
+#   from the current directory or a flag. There is no --profile-root. Run from
+#   anywhere else, it reads another tree's platform/ and writes the image into
+#   another tree's dist/. It works with the working directory set to the checkout
+#   forge was compiled in, which is what upstream CI does.
 #
 # So: clone the pin into a scratch directory, overlay this repository's forked
 # tree onto it, build forge there, run forge there, and copy the artifacts back.
-# Steps 1-4 are a workaround for a missing upstream flag, not a design.
+# This is a workaround for a missing upstream flag.
 #
 # This script never touches any existing Thermite working copy.
 set -euo pipefail
@@ -54,15 +54,14 @@ git -C "$clone" clean --quiet -fdx -e target -e dist
 echo "==> upstream pinned at $(git -C "$clone" rev-parse HEAD)"
 
 # Overlay this repository's forked tree. While the fork is unmodified this is a
-# no-op on content; once Bulla diverges it is the mechanism by which the
-# divergence is actually built.
+# no-op on content; once Bulla diverges it is what gets the divergence built.
 echo "==> overlaying forked platform/, kernel/, and src/ onto the pinned clone"
 rm -rf "$clone/platform/x86_64-pc-uefi-smp-v1"
 mkdir -p "$clone/platform"
 cp -R "$repo_root/platform/x86_64-pc-uefi-smp-v1" "$clone/platform/"
 # kernel/ is this repo's name for upstream's thermite-kernel/. The crate name is
-# deliberately unchanged (docs/upstream-pin.md), so it lands back under the name
-# the pinned workspace and the runtime's path dependency expect.
+# unchanged (docs/upstream-pin.md), so it lands back under the name the pinned
+# workspace and the runtime's path dependency expect.
 rm -rf "$clone/thermite-kernel"
 cp -R "$repo_root/kernel" "$clone/thermite-kernel"
 rm -rf "$clone/src"

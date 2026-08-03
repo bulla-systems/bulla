@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Check every forked file against the upstream pin, byte for byte.
 #
-# The fork is a copy of Thermite at the pin. Anywhere it differs, the difference
-# must be a deliberate, listed divergence — otherwise it is drift, and drift in
-# the platform layer is drift in the trusted base. See docs/upstream-pin.md.
+# The fork is a copy of Thermite at the pin. Any difference must be a listed
+# divergence with a reason; anything else is drift, and drift in the platform
+# layer is drift in the trusted base. See docs/upstream-pin.md.
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
@@ -84,7 +84,7 @@ while IFS= read -r file; do
 done < <(find platform kernel src -type f | sort)
 
 # A divergence that no longer diverges is stale bookkeeping: the entry claims a
-# difference that is not there, which is its own kind of inaccurate record.
+# difference that is not present.
 declared_count=0
 while IFS=$'\t' read -r path _; do
     [[ -z "$path" ]] && continue
