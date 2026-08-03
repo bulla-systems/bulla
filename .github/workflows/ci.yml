@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes qemu-system-x86 ovmf dosfstools mtools llvm oras
+          sudo apt-get install --yes qemu-system-x86 ovmf dosfstools mtools llvm
           qemu-system-x86_64 --version
           llvm-pdbutil --version
           # The acceptance harness needs a matched OVMF code/vars pair in one of
@@ -131,11 +131,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # oras is not in Ubuntu's archives; it ships as a release tarball.
       - name: Install oras
+        env:
+          ORAS_VERSION: "1.2.3"
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes oras
+          curl -fsSL -o /tmp/oras.tar.gz \
+            "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz"
+          sudo tar -xzf /tmp/oras.tar.gz -C /usr/local/bin oras
           oras version
 
       - name: Download the built image

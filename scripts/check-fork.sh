@@ -29,6 +29,13 @@ divergence_reason() {
     done
 }
 
+# sha256sum on Linux, shasum on macOS. Both print `<digest>  <name>`.
+if command -v sha256sum >/dev/null; then
+    sha256() { sha256sum | cut -d' ' -f1; }
+else
+    sha256() { shasum -a 256 | cut -d' ' -f1; }
+fi
+
 mkdir -p "$BUILD_ROOT"
 if [[ ! -d "$clone/.git" ]]; then
     git clone --quiet --no-checkout "$THERMITE_REMOTE" "$clone"
@@ -48,8 +55,8 @@ status=0
 declared_seen=""
 while IFS= read -r file; do
     up=$(upstream_path "$file")
-    here=$(shasum -a 256 <"$file" | cut -d' ' -f1)
-    if ! there=$(git -C "$clone" show "$THERMITE_PIN:$up" 2>/dev/null | shasum -a 256 | cut -d' ' -f1); then
+    here=$(sha256 <"$file")
+    if ! there=$(git -C "$clone" show "$THERMITE_PIN:$up" 2>/dev/null | sha256); then
         echo "ADDED    $file (no counterpart at $up upstream)"
         status=1
         continue

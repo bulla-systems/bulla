@@ -21,8 +21,14 @@ echo "==> build 2 of 2"
 ./scripts/build-image.sh dist/bulla.img >/dev/null
 cp dist/bulla.img "$work/build-2.img"
 
-one=$(shasum -a 256 <"$work/build-1.img" | cut -d' ' -f1)
-two=$(shasum -a 256 <"$work/build-2.img" | cut -d' ' -f1)
+# sha256sum on Linux, shasum on macOS.
+if command -v sha256sum >/dev/null; then
+    sha256() { sha256sum | cut -d' ' -f1; }
+else
+    sha256() { shasum -a 256 | cut -d' ' -f1; }
+fi
+one=$(sha256 <"$work/build-1.img")
+two=$(sha256 <"$work/build-2.img")
 echo "build 1: $one"
 echo "build 2: $two"
 
