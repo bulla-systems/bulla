@@ -51,11 +51,13 @@ Either outcome is publishable. Neither should be claimed before it happens.
 
 ## Publishing the image: done
 
-The image build is host-deterministic: `SOURCE_DATE_EPOCH` pinned, fixed volume
-ID, and two independent rebuilds compared byte-for-byte here rather than taken on
-the profile's word. Checking it that way turned up the limit, since the digests
-differ between hosts ([evidence](reproduction.md)). Upstream CI built the image,
-booted it, and discarded it.
+The image build is host-deterministic on a bare host: `SOURCE_DATE_EPOCH` pinned,
+fixed volume ID, and two independent rebuilds compared byte-for-byte here rather
+than taken on the profile's word. Checking it that way turned up a limit the
+profile never claimed to cover, since the digests differ between hosts. Pinning
+the toolchain by digest closes that: through `make image-container`, macOS/arm64
+and ubuntu-24.04/x86-64 produce the same image ([evidence](reproduction.md)).
+Upstream CI built the image, booted it, and discarded it.
 
 It is now published: `upload-artifact` on every run, and an OCI push to
 `ghcr.io/bulla-systems/bulla` on tags. [`docs/running.md`](running.md) makes it

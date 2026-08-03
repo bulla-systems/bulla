@@ -92,11 +92,20 @@ Twelve domains organize the 104 registry operations: `boot`, `memory`, `mmio`,
               SOURCE_DATE_EPOCH and volume ID pinned
 ```
 
-The build is host-deterministic. Two builds on one machine are byte-identical;
-two builds on different machines are not. The same source at the same pin yields
-different image digests from an `aarch64-apple-darwin` toolchain and an
-`x86_64-unknown-linux-gnu` one, so re-deriving a published image requires
-matching the build host ([evidence](reproduction.md)).
+Determinism has two levels here, and they are not the same claim.
+
+On a bare host the build is **host-deterministic**: two builds on one machine are
+byte-identical, and two builds on different machines are not. The same source at
+the same pin yields different digests from an `aarch64-apple-darwin` toolchain
+and an `x86_64-unknown-linux-gnu` one, because the divergence is in the host
+build of the toolchain rather than in the source, the flags, or the compiler
+version.
+
+Through [`Containerfile`](../Containerfile), which pins the toolchain by digest,
+the build is **reproducible across hosts**: macOS/arm64 under emulation and
+ubuntu-24.04/x86-64 produce the same image. Re-deriving a published image
+therefore needs the source, the pin, and the container digest
+([evidence](reproduction.md)).
 
 The QEMU acceptance matrix runs inside this pipeline rather than as a separate CI
 step. `forge build --target kernel-image` runs the frozen image builder and then

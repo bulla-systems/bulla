@@ -88,21 +88,47 @@ same compiler binary rather than two builds of the same compiler version.
 `make image-container` builds through it, forcing `linux/amd64` so an arm64 host
 runs the same toolchain under emulation.
 
-The claim this is meant to support is narrower than "reproducible from source":
-it is **reproducible from source plus this container digest**. Anyone re-deriving
-a published image needs the digest, which is why it is recorded here and in CI's
+The claim this supports is narrower than "reproducible from source": it is
+**reproducible from source plus this container digest**. Anyone re-deriving a
+published image needs the digest, which is why it is recorded here and in CI's
 step summary rather than left to a floating tag.
 
 `make determinism` cannot establish this. It builds twice on one machine, so it
-is structurally incapable of detecting cross-host divergence — it was green on
+is structurally incapable of detecting cross-host divergence, and it was green on
 both hosts while the two hosts disagreed. The test that bites is running
-`make image-container` on two different machines and comparing, which is why the
-digest is printed rather than only compared locally.
+`make image-container` on two different machines and comparing.
 
-**Status: NOT STARTED as a claim.** The container builds in CI, but a matching
-digest from a second, differently-architected machine has not been produced, so
-nothing here yet says the gap is closed. Until two such digests exist, the
-statement in this document remains that the build is host-deterministic.
+### Result: the digests match
+
+```
+macOS 25.5.0 / arm64, linux/amd64 under emulation   e46c4060215b3803416996c479db77ecc060b6a66650722ffcb3e0fa641ba211
+ubuntu-24.04 / x86-64, CI                           e46c4060215b3803416996c479db77ecc060b6a66650722ffcb3e0fa641ba211
+macOS, second independent run                       e46c4060215b3803416996c479db77ecc060b6a66650722ffcb3e0fa641ba211
+```
+
+Three builds across two machines of different architectures, one digest. CI run
+[30825435168](https://github.com/bulla-systems/bulla/actions/runs/30825435168).
+
+The third line matters separately: it rules out the emulation layer introducing
+per-run nondeterminism of its own, which would have made the first two matching
+by luck rather than by construction.
+
+This confirms the diagnosis. The divergence was the host build of the toolchain,
+and fixing the host fixes it. Note that the container digest `e46c4060…` differs
+from both host-native digests (`e08db880…` on macOS, `2ef4fdad…` on CI), which is
+expected: the container's rustc is a third build of 1.95.0, and it is the one
+that is now pinned.
+
+**What can now be said:** the image is reproducible from this repository at the
+recorded pin, built through `Containerfile` at
+`rust@sha256:6f9e6325…`. Two machines that disagreed before now agree.
+
+**What still cannot:** reproducibility without the container is unchanged. A
+build on a bare host still depends on that host's toolchain build, so
+`make image` remains host-deterministic and only `make image-container` carries
+the cross-host property. The published artifact is currently the host-native
+build, not the container build; moving publication onto the container output is
+a separate change.
 
 ### Determinism
 
