@@ -89,34 +89,65 @@ returns `WrongPrivilege`. Under the invariant that branch is unreachable, which
 is a result in itself: the proof is stronger than the runtime check, and
 discharging P1 should show the check to be dead rather than load-bearing.
 
-The three transitions to port, with the signatures `context.rs` actually has:
+The three transitions to port, with the signatures `context.rs` has. Thermite
+has no `impl` blocks, so these are free functions taking the context by value and
+returning the new one. It also has **no implication operator**: `==>` is not in
+the grammar, and a conditional postcondition is written `!a || b`. Payloads are
+projected with `match` in `ens` rather than `.is_ok()` or `.unwrap()`, neither of
+which exists.
 
-```rust
-fn enter(ctx: UserContext, cap: Capability) -> (r: Result<TrapFrame, ContextError>)
+```thermite
+fn enter(ctx: UserContext, cap: Capability) -> Result<TrapFrame, ContextError>
   req true
-  ens r.is_ok() ==> !final(ctx).runnable          // entering consumes runnability
-  ens r.is_ok() ==> r.unwrap().generation == ctx.generation
-  ens !ctx.runnable ==> r == Err(ContextError::NotRunnable)
+  ens match result {
+        Ok(f)  => f.privilege == Privilege::User
+                  && f.generation == ctx.generation
+                  && f.context == ctx.id,
+        Err(e) => !ctx.runnable || e != ContextError::NotRunnable,
+      }
+  fx  pure
 
-fn trap(ctx: UserContext, cap: Capability, origin: TrapOrigin, regs: Registers)
-    -> (r: Result<TrapFrame, ContextError>)
+fn resume(ctx: UserContext, cap: Capability, frame: TrapFrame, value: u64)
+    -> Result<UserContext, ContextError>
   req true
-  ens r.is_ok() ==> r.unwrap().generation == ctx.generation   // a trap does not advance the epoch
-
-fn resume(ctx: UserContext, cap: Capability, frame: TrapFrame, result: u64)
-    -> (r: Result<(), ContextError>)
-  req true
-  ens frame.generation != ctx.generation ==> r == Err(ContextError::WrongGeneration)   // P2
-  ens frame.context != ctx.id ==> r == Err(ContextError::WrongContext)
-  ens r.is_ok() ==> final(ctx).generation == ctx.generation + 1
-  ens r.is_ok() ==> final(ctx).runnable
+  ens match result {
+        Ok(c)  => frame.generation == ctx.generation      // P2
+                  && frame.context == ctx.id
+                  && c.generation == ctx.generation + 1
+                  && c.runnable,
+        Err(e) => true,
+      }
+  fx  pure
 ```
 
 `resume` carries P2: the only path to `Ok` runs through a generation equal to the
 context's, and success advances the epoch by one. A false clause yields a
 concrete `(frame.generation, ctx.generation)` pair. The `checked_add` in the
-source means `GenerationOverflow` is a real branch and needs its own clause
-rather than an assumed-total increment.
+source makes `GenerationOverflow` a real branch needing its own clause rather
+than an assumed-total increment.
+
+## Blocked upstream
+
+T0 was described here and in [the roadmap](roadmap.md) as needing no language
+work. That is wrong, and the reason is three lines:
+
+```thermite
+struct Regs  { ip: u64 }
+struct Frame { regs: Regs, generation: u64 }
+```
+
+`Frame` does not certify. The per-struct check harness emits the field without
+weaving in the referenced declaration, so Verus reports
+`error[E0425]: cannot find type 'Regs' in this scope`. The same happens for a
+field of a user-declared *enum* type. A struct whose fields are all primitives
+certifies at L3, so the failure is specific to user-declared field types.
+
+This blocks the port directly: `UserContext` has `registers: Registers`, and
+`TrapFrame` has `origin: TrapOrigin`, `registers: Registers` and
+`privilege: Privilege`. Every one of them is a user-declared field type.
+
+No conformance test in Thermite has a struct with a user-declared field type,
+which is why it survives. See [G4](language-gaps.md#g4-struct-fields-of-user-declared-types).
 
 ## What this does not prove
 

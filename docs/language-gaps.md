@@ -9,30 +9,54 @@ wrong in the original survey and are corrected here.
 
 ---
 
-## G1: `Map` lowering
+## G1: `Map` coverage — OPEN QUESTION, not a gap
 
-Status upstream: `REQ-LOWER-COLLECTIONS-MAP-VSTD` is `not_started`.
+> **Corrected 2026-08-03.** This section previously claimed `Map` parses but does
+> not lower, and that 13 of 19 model files were blocked on
+> `REQ-LOWER-COLLECTIONS-MAP-VSTD`. **That was wrong.** It read a deferred
+> alternative implementation as a missing capability. Recorded rather than
+> deleted, because the error shape — treating a `not_started` REQ as a blocker
+> without checking what it actually defers — is one this project should be able
+> to recognise again.
 
-| | syntax | lowering |
-|---|---|---|
-| `Vec<T>` | shipped | shipped |
-| `Map<K,V>` | shipped | not started |
+**`Map` lowering ships.** `conformance/map_kv.th` upstream is a working
+`Map<u64, u64>` — `Map::new()`, `insert`, `get`, `contains_key`, `len` — over a
+bounded Vec-of-pairs `TMap` backing, grounded against real Verus by
+`forge/tests/map_conformance.rs`. Contracts over it are cage-admissible through
+`contains_key`.
 
-`Map` parses but does not lower to vstd. Since vstd already provides `Map`, this
-is a lowering and spec-function problem rather than a semantics problem.
+| REQ | status |
+|---|---|
+| `REQ-SYNTAX-MAP-TYPE`, `REQ-SYNTAX-MAP-METHODS` | shipped |
+| `REQ-LOWER-MAP-WRAPPER` (bounded wrapper) | **shipped** |
+| `REQ-LOWER-MAP-RIPPLE`, `REQ-LOWER-MAP-ERRORS` | shipped |
+| `REQ-SPEC-VALIDATOR-MAP-CAGE` | shipped |
+| `REQ-LOWER-COLLECTIONS-MAP-VSTD` | `not_started` — a deferred **thin `vstd::map` alternative**, not the capability. Its registry note: *"bounded Vec-of-pairs Map lowering is tracked separately."* |
 
-Scope: medium.
+### What is actually open
 
-Unblocks T2 and T3. The kernel models are `BTreeMap`-heavy; counted in the forked
-tree, 13 of the 19 model files reference it:
+Whether the shipped bounded wrapper covers what the kernel models do with
+`BTreeMap`. Thirteen of nineteen model files use one:
 
 ```
 device 6 · smp 5 · scheduler 5 · frame 5 · dma 5 · irq 4
 sync 3 · services 3 · memory 3 · event 3 · policy 2 · capability 2 · atomic 2
 ```
 
-This is the highest-leverage item in the plan: one upstream requirement moves
-most of the kernel from blocked to buildable.
+The visible shipped surface is `insert` / `get` / `contains_key` / `len` over
+primitive keys. Three things need measuring against actual usage:
+
+1. **Removal** — no `remove` appears in the builtin method allowlist. Capability
+   revocation and frame free almost certainly need it.
+2. **Iteration** — no iteration primitive is visible. Scheduler and IPI fan-out
+   traverse their maps.
+3. **Non-primitive keys and values** — the conformance case is `u64 → u64`; the
+   models key on newtypes and store structs.
+
+Until that audit runs, **G1 has no scope estimate and is not a blocker** — it is
+an unmeasured question. The audit is per-file and mechanical: enumerate every
+`BTreeMap` operation the models actually call, and check each against the
+lowering.
 
 ---
 
@@ -84,6 +108,81 @@ Scope: medium-to-large if solved properly.
 Workaround: hand-monomorphize at fixed N. A kernel has fixed limits throughout
 (`maximum_cpus = 64`, `scheduler_tasks = 4096`), so this costs little. G3 is a
 papercut and should not be prioritized over G1.
+
+---
+
+## G4: struct fields of user-declared types
+
+**Status upstream:** unreported. Found here on 2026-08-03 while starting T0.
+
+A `struct` whose field type is another user-declared `struct` or `enum` does not
+certify. Three lines reproduce it:
+
+```thermite
+struct Regs  { ip: u64 }
+struct Frame { regs: Regs, generation: u64 }
+```
+
+```
+error[E0425]: cannot find type `Regs` in this scope
+  |     pub regs: Regs,
+```
+
+The per-struct check harness emits the field declaration without weaving in the
+declaration it references. A struct whose fields are all primitives certifies at
+L3, so the fault is specific to user-declared field types, and the containing
+function's own obligations still discharge. It is the struct's harness that
+fails, which fails the project.
+
+No `.th` in Thermite's conformance corpus has a struct with a user-declared field
+type, which is why this survives. `REQ-LOWER-ADT-STRUCT` and
+`REQ-LOWER-L1-STRUCT-INVARIANTS` both exist and neither covers it.
+
+**Scope:** small. It is a missing dependency in harness construction rather than
+a semantics question.
+
+**Blocks:** [T0](roadmap.md), immediately. `UserContext` has
+`registers: Registers`; `TrapFrame` has `origin: TrapOrigin`,
+`registers: Registers` and `privilege: Privilege`.
+
+### G4b: `inv` does not bind the receiver for `is`
+
+A second, narrower fault in the same area. A struct invariant written with the
+variant-test operator loses its receiver:
+
+```thermite
+struct Frame { privilege: Privilege } inv privilege is User
+```
+
+```
+error[E0425]: cannot find value `privilege` in this scope
+  |     (privilege is User)
+  |      help: you might have meant to use the available field: `self.privilege`
+```
+
+Writing the same invariant as `inv privilege == Privilege::User` compiles, so
+there is a workaround and the fault is confined to `is` in an `inv` clause.
+Upstream commit `b8dc3947`, "Bind struct invariant fields through unary
+operators", addressed the neighbouring case, which suggests the binding pass
+enumerates expression forms and `is` was missed.
+
+---
+
+## G5: no implication operator
+
+**Status upstream:** by design, as far as the grammar shows.
+
+Thermite's binary operator inventory has no `==>`. Conditional postconditions are
+written `!a || b`. This is a readability cost rather than an expressiveness one,
+and it bites hardest in exactly the contracts this project writes, where most
+clauses are of the form "if the result is `Ok`, then ...".
+
+Worth noting that `==>` appears in a comment in `conformance/parse_u64.th`
+describing a contract in prose, which is how it got into an earlier draft of
+[the MWE](mwe-context.md) as though it were syntax.
+
+**Scope:** small, and a candidate for an upstream RFC: surface sugar desugaring
+to `!a || b`, with no change to the proof obligations.
 
 ---
 
