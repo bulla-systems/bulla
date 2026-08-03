@@ -1,0 +1,4 @@
+target/
+dist/
+*.img
+.DS_Store
