@@ -4,7 +4,7 @@
 
 IMAGE ?= dist/bulla.img
 
-.PHONY: all image verify determinism boot-matrix check-fork check clean
+.PHONY: all image image-container verify determinism boot-matrix check-fork check clean
 
 all: check
 
@@ -28,9 +28,13 @@ determinism:
 boot-matrix:
 	./platform/x86_64-pc-uefi-smp-v1/test-qemu.py $(IMAGE) --output-dir dist/boot-evidence
 
+## image-container: build inside the pinned container, so the digest is host-independent
+image-container:
+	./scripts/build-in-container.sh $(IMAGE)
+
 # determinism builds twice and leaves the second image in place, so it stands in
 # for `image` here rather than adding a third build of the same tree.
 check: check-fork determinism verify boot-matrix
 
 clean:
-	rm -rf dist .build
+	rm -rf dist .build .build-container

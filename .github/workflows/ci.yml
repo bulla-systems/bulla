@@ -90,6 +90,27 @@ jobs:
       - name: Boot the acceptance matrix
         run: make boot-matrix
 
+      # The host-deterministic result in docs/reproduction.md is what this
+      # answers: two builds on one machine cannot detect cross-host divergence,
+      # and were green on both hosts while the hosts disagreed. Building inside
+      # the digest-pinned container makes the digest depend on the source and
+      # the pin instead of on the runner.
+      - name: Build inside the pinned container
+        run: |
+          set -euo pipefail
+          make image-container IMAGE=dist/bulla-container.img
+          {
+            echo "### Container build"
+            echo
+            echo '```'
+            echo "sha256  $(sha256sum dist/bulla-container.img | cut -d' ' -f1)"
+            echo "base    rust@sha256:6f9e63259f12e1e599296f5ecfed2bae46de4af0ee0525dd8b89c046e236d5c5"
+            echo '```'
+            echo
+            echo "Compare against the same target run on another machine. Matching"
+            echo "digests are the cross-host claim; two builds on one host are not."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Record what the artifact is
         run: |
           set -euo pipefail
@@ -113,6 +134,7 @@ jobs:
           name: bulla-image-${{ github.sha }}
           path: |
             dist/bulla.img
+            dist/bulla-container.img
             dist/bulla.receipt.json
             dist/bulla.sections
             dist/bulla.symbols

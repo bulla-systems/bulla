@@ -76,9 +76,33 @@ differently. Two things this rules out:
 
 What remains is the host build of the toolchain itself: the same LLVM version
 built against a different standard library makes different tie-breaking
-decisions in section ordering. That points at a fixed build environment, a
-container image pinned by digest, rather than a compiler flag. Confirming it and
-implementing it is separate work.
+decisions in section ordering. That points at a fixed build environment rather
+than a compiler flag.
+
+### The fix being attempted
+
+[`Containerfile`](../Containerfile) pins a build environment by digest —
+`rust:1.95.0-slim-bookworm` at
+`sha256:6f9e6325…`, plus a fixed Verus version — so that two machines run the
+same compiler binary rather than two builds of the same compiler version.
+`make image-container` builds through it, forcing `linux/amd64` so an arm64 host
+runs the same toolchain under emulation.
+
+The claim this is meant to support is narrower than "reproducible from source":
+it is **reproducible from source plus this container digest**. Anyone re-deriving
+a published image needs the digest, which is why it is recorded here and in CI's
+step summary rather than left to a floating tag.
+
+`make determinism` cannot establish this. It builds twice on one machine, so it
+is structurally incapable of detecting cross-host divergence — it was green on
+both hosts while the two hosts disagreed. The test that bites is running
+`make image-container` on two different machines and comparing, which is why the
+digest is printed rather than only compared locally.
+
+**Status: NOT STARTED as a claim.** The container builds in CI, but a matching
+digest from a second, differently-architected machine has not been produced, so
+nothing here yet says the gap is closed. Until two such digests exist, the
+statement in this document remains that the build is host-deterministic.
 
 ### Determinism
 
