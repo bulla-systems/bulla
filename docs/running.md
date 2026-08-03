@@ -37,7 +37,8 @@ This is a raw disk image stored in a registry, not a container image, so
 `docker run` does not apply to it.
 
 While this repository is private the package is too, and the pull needs
-credentials with `read:packages`:
+credentials carrying `read:packages`. The `repo` scope does not cover GHCR, so a
+token without it gets `denied` even with full access to this repository:
 
 ```sh
 gh auth refresh -h github.com -s read:packages   # once

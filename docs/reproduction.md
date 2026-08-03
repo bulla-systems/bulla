@@ -131,11 +131,16 @@ ArtifactType: application/vnd.bulla.kernel-image.v1
 Digest: sha256:178487ec2ba17f66aba803eca23deb51792488bef1d395ba842d223745ce056e
 ```
 
-The blob digest matches the image built and booted on both hosts. Fetching it
-back has not been done: the package is private while the repository is, and the
-development host's token lacks `read:packages`, so `oras manifest fetch` returns
-`denied`. The push is evidenced by the registry's response to it. A round-trip
-pull is not yet evidenced.
+The round trip was then closed from the development host. `oras pull` returned
+manifest `sha256:178487ec…` with two layers, `bulla.img` at 67108864 bytes under
+`application/vnd.bulla.disk-image.raw` and `bulla.receipt.json` under
+`application/vnd.bulla.receipt.v1+json`, carrying the pin as an annotation. The
+pulled image hashes to `2ef4fdad…`, matching what CI built, and booting it by
+following [`docs/running.md`](running.md) reached
+`THERMITE_SUCCESS gate=boot-smp-v1` at 4 CPUs.
+
+A published artifact has therefore been fetched from the registry by a machine
+that did not build it and run there.
 
 ## Assurance carried
 
