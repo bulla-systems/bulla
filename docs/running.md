@@ -38,6 +38,20 @@ is **not** a container image — `docker run` on it is meaningless. It is a raw
 disk image stored in a registry because registries are a convenient place to put
 bytes.
 
+**While this repository is private, so is the package**, and the pull needs
+credentials with `read:packages`:
+
+```sh
+gh auth refresh -h github.com -s read:packages   # once
+gh auth token | oras login ghcr.io -u <your-github-username> --password-stdin
+```
+
+Without that scope the registry answers
+`denied: requested access to the resource is denied`, which reads like the
+artifact is missing rather than like you are not permitted to see it. If the
+package is later made public, the login step goes away and `oras pull` works
+unauthenticated.
+
 From a CI run, the `bulla-image-<sha>` artifact on the `ci` workflow carries the
 same image plus the boot evidence.
 
