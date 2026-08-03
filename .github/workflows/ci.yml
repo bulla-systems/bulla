@@ -94,7 +94,8 @@ jobs:
       # answers: two builds on one machine cannot detect cross-host divergence,
       # and were green on both hosts while the hosts disagreed. Building inside
       # the digest-pinned container makes the digest depend on the source and
-      # the pin instead of on the runner.
+      # the pin instead of on the runner. It runs the frozen image builder only,
+      # since the proof closure and the QEMU gate contribute no image bytes.
       - name: Build inside the pinned container
         run: |
           set -euo pipefail
