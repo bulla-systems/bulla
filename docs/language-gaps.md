@@ -113,7 +113,7 @@ papercut and should not be prioritized over G1.
 
 ## G4: struct fields of user-declared types
 
-**Status upstream:** unreported. Found here on 2026-08-03 while starting T0.
+**Status upstream:** reported as [#122](https://github.com/dollspace-gay/Thermite/issues/122). Found here on 2026-08-03 while starting T0.
 
 A `struct` whose field type is another user-declared `struct` or `enum` does not
 certify. Three lines reproduce it:
@@ -146,6 +146,8 @@ a semantics question.
 `registers: Registers` and `privilege: Privilege`.
 
 ### G4b: `inv` does not bind the receiver for `is`
+
+Filed with G4 in [#122](https://github.com/dollspace-gay/Thermite/issues/122).
 
 A second, narrower fault in the same area. A struct invariant written with the
 variant-test operator loses its receiver:

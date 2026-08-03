@@ -147,7 +147,8 @@ This blocks the port directly: `UserContext` has `registers: Registers`, and
 `privilege: Privilege`. Every one of them is a user-declared field type.
 
 No conformance test in Thermite has a struct with a user-declared field type,
-which is why it survives. See [G4](language-gaps.md#g4-struct-fields-of-user-declared-types).
+which is why it survives. See [G4](language-gaps.md#g4-struct-fields-of-user-declared-types), reported
+upstream as [#122](https://github.com/dollspace-gay/Thermite/issues/122).
 
 ## What this does not prove
 

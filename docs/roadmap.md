@@ -7,7 +7,7 @@ progress" status, since that is where overclaiming lives.
 
 | tier | subsystem | property worth proving | blocker | status |
 |---|---|---|---|---|
-| T0 | privilege / context | a context entered as User is never resumed with Kernel privilege; a stale generation is never resumable | [G4](language-gaps.md#g4-struct-fields-of-user-declared-types), struct fields of user-declared types | NOT STARTED |
+| T0 | privilege / context | a context entered as User is never resumed with Kernel privilege; a stale generation is never resumable | [G4](language-gaps.md#g4-struct-fields-of-user-declared-types) / upstream [#122](https://github.com/dollspace-gay/Thermite/issues/122) | NOT STARTED |
 | T1 | capability ledger | no capability escalation; generation-safe revocation | `Vec` only, if the ledger scans linearly | NOT STARTED |
 | T2 | frame / memory | no physical frame is double-allocated | [G1](language-gaps.md#g1--map-lowering), `Map` lowering | NOT STARTED |
 | T3 | irq / device / dma | no DMA target overlaps kernel memory | [G1](language-gaps.md#g1--map-lowering) | NOT STARTED |
