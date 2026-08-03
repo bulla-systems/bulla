@@ -60,7 +60,7 @@ match.** The invocation is identical apart from the two file paths.
 
 | system | install | pair to use |
 |---|---|---|
-| Debian / Ubuntu | `sudo apt install ovmf` | `/usr/share/OVMF/OVMF_CODE_4M.fd` + `/usr/share/OVMF/OVMF_VARS_4M.fd` (older releases ship the 2 MiB `OVMF_CODE.fd` + `OVMF_VARS.fd` instead) |
+| Debian / Ubuntu | `sudo apt install ovmf` | `/usr/share/OVMF/OVMF_CODE_4M.fd` + `/usr/share/OVMF/OVMF_VARS_4M.fd` — verified on ubuntu-24.04, which ships **only** the 4 MiB layout, no plain `OVMF_CODE.fd`. Older releases ship the 2 MiB pair instead |
 | Fedora / RHEL | `sudo dnf install edk2-ovmf` | `/usr/share/edk2/ovmf/OVMF_CODE.fd` + `/usr/share/edk2/ovmf/OVMF_VARS.fd` |
 | Arch | `sudo pacman -S edk2-ovmf` | `/usr/share/edk2/x64/OVMF_CODE.4m.fd` + `OVMF_VARS.4m.fd` |
 | Alpine | `doas apk add ovmf` | `/usr/share/OVMF/OVMF_CODE.fd` + `/usr/share/OVMF/OVMF_VARS.fd` |

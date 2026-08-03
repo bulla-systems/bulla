@@ -23,39 +23,66 @@ from the macOS/arm64 host; CI results will appear on the workflow run.
 
 ## Results
 
-| step | result |
-|---|---|
-| `make check-fork` | **pass** — 34 forked files, 33 byte-identical to the pin, 1 declared divergence |
-| `forge build --target kernel-image` | **pass** — `dist/bulla.img`, 67108864 bytes |
-| `forge verify-build --json` | **pass** — `"valid": true` |
-| determinism, two builds compared | **pass** — byte-identical |
-| QEMU matrix, 6 scenarios | **pass** — all 6 |
-| `docs/running.md` followed end to end | **pass** — booted from a clean directory |
+Run on two hosts. Both are green; they do **not** produce the same image.
 
-### The image
+| step | macOS / arm64 | CI: ubuntu-24.04 / x86-64 |
+|---|---|---|
+| `make check-fork` | **pass** — 34 files, 33 byte-identical to the pin, 1 declared divergence | **pass** |
+| `forge build --target kernel-image` | **pass** — 67108864 bytes | **pass** |
+| `forge verify-build --json` | **pass** — `"valid": true` | **pass** |
+| determinism, two builds compared | **pass** — byte-identical | **pass** — byte-identical |
+| QEMU matrix, 6 scenarios | **pass** — all 6 | **pass** — all 6 |
+| `docs/running.md` followed end to end | **pass** — booted from a clean directory | not run there |
+
+CI run: [30779676660](https://github.com/bulla-systems/bulla/actions/runs/30779676660), 4m06s.
+
+### The image, and the limit of the determinism claim
 
 ```
-sha256  e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
-bytes   67108864
+macOS / arm64        e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
+ubuntu-24.04 / x86-64  2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
+both                 67108864 bytes
 ```
 
-An image built from Bulla's forked tree and an image built from the **unmodified
-pin** have the same digest. The one declared divergence is in `test-qemu.py`,
-which is not an input to the image.
+**These differ, and that is the most important result on this page.** The
+`deterministic_rebuilds = 2` claim in `profile.toml` holds *on a given host* —
+two builds are byte-identical, twice over, on two different hosts. It does not
+hold *across* hosts. Cross-compiling to `x86_64-unknown-uefi` from an
+`aarch64-apple-darwin` toolchain and from an `x86_64-unknown-linux-gnu` toolchain
+produces different PE bytes, even at the same pinned Rust channel, the same
+`SOURCE_DATE_EPOCH`, and the same volume ID.
+
+So the honest statement is: **the build is host-deterministic, not
+reproducible.** Anyone re-deriving a published image must match the build host,
+not just the source and the pin. Nothing upstream claimed otherwise — the profile
+says `deterministic_rebuilds`, not "reproducible" — but the distinction is easy
+to read past, and `docs/architecture.md` did read past it before this pass.
+
+Both digests are stable: on each host, two independent builds from a clean
+checkout of the pin, a fresh overlay, and a fresh `forge` produced the same
+bytes. Within the macOS host, an image built from Bulla's forked tree and one
+built from the **unmodified pin** also match — the one declared divergence is in
+`test-qemu.py`, which is not an input to the image.
+
+Narrowing this gap is real work and is not part of this pass. The likely levers
+are `--remap-path-prefix`, a pinned linker, and a container-fixed toolchain.
 
 ### Determinism
 
 `profile.toml` claims `deterministic_rebuilds = 2`, and forge's own receipt sets
 `reproducible_pair_checked: true`. Both were confirmed from outside rather than
 read back, because a receipt asserting that an image is reproducible is not
-evidence that it is. Two full builds — each from a clean checkout of the pin, a
-fresh overlay, and a fresh `forge` — produced:
+evidence that it is. Two full builds per host — each from a clean checkout of the
+pin, a fresh overlay, and a fresh `forge`:
 
 ```
-build 1: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
-build 2: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
-cmp: identical
+macOS / arm64          build 1: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
+                       build 2: e08db880837bb0d2a90e7d23528aeefc116423f3240e8fd09dac0ae45313cac6
+ubuntu-24.04 / x86-64  build 1: 2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
+                       build 2: 2ef4fdad0bef5c9b0bb88c1c5c651fb3b905be0f00364b4e36adda0fdeb33a2c
 ```
+
+Identical within each host, different between them. See above.
 
 ### QEMU/OVMF acceptance matrix
 

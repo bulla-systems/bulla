@@ -17,7 +17,7 @@ statements and the difference is the entire project.
 
 | | status |
 |---|---|
-| bootable image, built and booted here | **SHIPPED** — `dist/bulla.img`, six of six QEMU/OVMF scenarios, byte-identical across two builds ([evidence](docs/reproduction.md)) |
+| bootable image, built and booted here | **SHIPPED** — `dist/bulla.img`, six of six QEMU/OVMF scenarios on two hosts, byte-identical across two builds on each ([evidence](docs/reproduction.md)) |
 | image published where an outsider can fetch and run it | **SHIPPED** — CI artifact and GHCR push ([how to run it](docs/running.md)) |
 | T0 — a verified kernel subsystem | **NOT STARTED** — blocker: none. It is next, and no language work is required ([MWE](docs/mwe-context.md)) |
 

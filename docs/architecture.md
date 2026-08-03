@@ -88,9 +88,16 @@ Twelve domains organize the 104 registry operations: `boot`, `memory`, `mmio`,
                         │
                         ▼
               FAT32 UEFI disk image
-              deterministic: rebuilt twice and compared,
+              host-deterministic: rebuilt twice and compared,
               SOURCE_DATE_EPOCH and volume ID pinned
 ```
+
+**Host-deterministic, not reproducible.** Two builds on one machine are
+byte-identical; two builds on *different* machines are not. Measured: the same
+source at the same pin yields different image digests from an
+`aarch64-apple-darwin` toolchain and an `x86_64-unknown-linux-gnu` one. Anyone
+re-deriving a published image has to match the build host too
+([evidence](reproduction.md)).
 
 The QEMU acceptance matrix is **part of this pipeline, not a separate CI step**:
 `forge build --target kernel-image` runs the frozen image builder and then the

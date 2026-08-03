@@ -47,9 +47,12 @@ Either outcome is publishable. Neither should be claimed before it happens.
 
 ## Free win — done
 
-The image build is deterministic: `SOURCE_DATE_EPOCH` pinned, fixed volume ID,
-and two independent rebuilds compared byte-for-byte here rather than taken on
-the profile's word. Upstream CI built it, booted it, and threw it away.
+The image build is **host-deterministic**: `SOURCE_DATE_EPOCH` pinned, fixed
+volume ID, and two independent rebuilds compared byte-for-byte here rather than
+taken on the profile's word. Checking it that way is what turned up the limit —
+the digests differ *between* hosts, so the build is not reproducible in the
+cross-machine sense ([evidence](reproduction.md)). Upstream CI built it, booted
+it, and threw it away.
 
 It is now published — `upload-artifact` on every run, an OCI push to
 `ghcr.io/bulla-systems/bulla` on tags — and
