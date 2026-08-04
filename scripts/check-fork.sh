@@ -23,10 +23,16 @@ platform/x86_64-pc-uefi-smp-v1/test-qemu.py	adds BULLA_OVMF_DIR as a firmware se
 EOF
 )
 
+# Always succeeds. The `[[ ]] && printf` compound returns 1 on a non-matching
+# line, which as the loop body's last command makes the loop, and so the
+# function, return 1 — and under `set -e` that killed the script at the first
+# undeclared drift, before it could report anything. An exit-code-only negative
+# test does not catch that, because the exit code is 1 either way.
 divergence_reason() {
     printf '%s\n' "$DIVERGENCES" | while IFS=$'\t' read -r path reason; do
-        [[ "$path" == "$1" ]] && printf '%s' "$reason"
+        if [[ "$path" == "$1" ]]; then printf '%s' "$reason"; fi
     done
+    return 0
 }
 
 # sha256sum on Linux, shasum on macOS. Both print `<digest>  <name>`.
@@ -60,11 +66,21 @@ upstream_path() {
 }
 
 status=0
+authored=0
 declared_seen=""
 while IFS= read -r file; do
     up=$(upstream_path "$file")
     here=$(sha256 <"$file")
     if ! there=$(git -C "$clone" show "$THERMITE_PIN:$up" 2>/dev/null | sha256); then
+        # platform/ and kernel/ are wholesale forks: a file with no upstream
+        # counterpart there is drift. src/ is this repository's own source
+        # directory that happens to contain two forked .th files, so a file
+        # with no counterpart there is Bulla-authored, which is the point.
+        if [[ "$file" == src/* ]]; then
+            echo "AUTHORED $file (not forked; no upstream counterpart expected)"
+            authored=$((authored + 1))
+            continue
+        fi
         echo "ADDED    $file (no counterpart at $up upstream)"
         status=1
         continue
@@ -96,6 +112,6 @@ while IFS=$'\t' read -r path _; do
 done <<< "$DIVERGENCES"
 
 if [[ $status -eq 0 ]]; then
-    echo "fork matches Thermite $THERMITE_PIN, with $declared_count declared divergence(s)"
+    echo "fork matches Thermite $THERMITE_PIN, with $declared_count declared divergence(s) and $authored Bulla-authored file(s)"
 fi
 exit $status
