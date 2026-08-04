@@ -9,8 +9,8 @@ progress" status, since that is where overclaiming lives.
 |---|---|---|---|---|
 | T0 | privilege / context | a context entered as User is never resumed with Kernel privilege; a stale generation is never resumable | [G4](language-gaps.md#g4-struct-fields-of-user-declared-types) / upstream [#122](https://github.com/dollspace-gay/Thermite/issues/122) | NOT STARTED |
 | T1 | capability ledger | no capability escalation; generation-safe revocation | [G4](language-gaps.md#g4-struct-fields-of-user-declared-types) only; the G1 audit clears it | NOT STARTED |
-| T2 | frame / memory | no physical frame is double-allocated | [G1](language-gaps.md#g1-map-needs-remove-and-iteration): `remove` and iteration | NOT STARTED |
-| T3 | irq / device / dma | no DMA target overlaps kernel memory | [G1](language-gaps.md#g1-map-needs-remove-and-iteration): `remove` | NOT STARTED |
+| T2 | frame / memory | no physical frame is double-allocated | [G1](language-gaps.md#g1-map-needs-remove-and-iteration) / upstream [#123](https://github.com/dollspace-gay/Thermite/issues/123): `remove` and iteration | NOT STARTED |
+| T3 | irq / device / dma | no DMA target overlaps kernel memory | [G1](language-gaps.md#g1-map-needs-remove-and-iteration) / upstream [#123](https://github.com/dollspace-gay/Thermite/issues/123): `remove` | NOT STARTED |
 | T4 | smp / sync / atomic | TLB shootdown correctness; lock safety | [G2](language-gaps.md#g2-no-concurrency-semantics), no concurrency semantics exist | NOT STARTED |
 
 ## T0 is the whole near-term plan

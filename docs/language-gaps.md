@@ -11,6 +11,8 @@ wrong in the original survey and are corrected here.
 
 ## G1: `Map` needs `remove` and iteration
 
+**Status upstream:** reported as [#123](https://github.com/dollspace-gay/Thermite/issues/123).
+
 > **Corrected 2026-08-03.** This section previously claimed `Map` parses but does
 > not lower, and that 13 of 19 model files were blocked on
 > `REQ-LOWER-COLLECTIONS-MAP-VSTD`. **That was wrong.** It read a deferred
