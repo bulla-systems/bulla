@@ -250,6 +250,133 @@ to `!a || b`, with no change to the proof obligations.
 
 ---
 
+## Found by attempting the port
+
+`src/context.th` is a real 200-line port of `kernel/src/context.rs`, written and
+checked against Thermite at the pin on 2026-08-03 while
+[#122](https://github.com/dollspace-gay/Thermite/issues/122) is outstanding. It
+does not certify, which was expected. Six further gaps surfaced on the way, none
+of which reading the language reference would have found.
+
+Where it got to:
+
+```
+L3   Privilege · CapabilityKind · TrapOrigin · ContextError   (enums)
+L3   Registers                                                (primitive-only struct)
+L3   canonical · holds_rights                                 (spec fns)
+L3   create                                                   ← P3, P4, P5 discharged
+L0   Capability · UserContext · TrapFrame                      G4
+L0   enter · resume                                            G12
+```
+
+`create` certifying is the substantive result: no kernel address, canonical
+addresses, and 16-byte stack alignment are proven for all inputs, against a
+contract whose mutants die.
+
+### G6: an integer literal in `dec` has no inferable type
+
+```thermite
+spec fn canonical(address: u64) -> bool
+  dec 0
+```
+```
+error[E0283]: type annotations needed
+   | decreases 0
+   | cannot infer type of the type parameter ... on `spec_literal_integer`
+```
+
+Every `spec fn` in the conformance corpus uses a parameter as its measure
+(`dec l`, `dec r`, `dec xs.len()`), so a constant measure is unreached. Naming a
+parameter works and is the workaround.
+
+### G7: `==` on a user enum works in spec position and fails in exec position
+
+```thermite
+fn f(k: K) -> bool ... { if k == K::A { .. } }   // error[E0369]
+fn f(k: K) -> K ... ens result == K::A { K::A }  // L3
+```
+
+The lowering does not put `PartialEq` on user enums in exec code. `is Variant`
+works in exec position and is the workaround.
+
+Read together with [G4b](#g4b-inv-does-not-bind-the-receiver-for-is) this is a
+neat complementary pair: an `inv` clause takes `==` and not `is`, and an exec
+body takes `is` and not `==`.
+
+### G8: referencing an enum variant shadows a same-named struct
+
+```thermite
+enum Kind { Thing, Other }
+struct Thing { id: u32 }
+// in one fn: discriminate on Kind::Thing, then construct Thing { id }
+error[E0559]: variant `Kind::Thing` has no field named `id`
+```
+
+Construction resolves to the variant. Neither qualifying (`k is Kind::Thing`)
+nor using `match` avoids it; only renaming does. Constructing the struct in a
+function that never mentions the variant is fine.
+
+This is not hypothetical for a port: `CapabilityKind::UserContext` and
+`struct UserContext` are both names `kernel/src/context.rs` uses, and the two
+meet in every transition. `src/context.th` prefixes the variants to get past it,
+which is a divergence from the source it is supposed to mirror.
+
+### G9: `spec fn` is not callable from exec position
+
+```
+error: cannot call function `holds_rights` with mode spec
+```
+
+The language reference describes spec functions as "total, terminating,
+executable", and the lowering emits Verus `spec fn`, which is ghost-only. A
+predicate needed in both a contract and a body has to be written twice: once as
+a `spec fn` and once inline.
+
+### G10: the `u64::MAX` literal lowers to `u64::MAX + 1`
+
+```thermite
+x == 18446744073709551615     // written
+if ctx.generation == 18446744073709551616 {   // emitted
+error: integer literal out of range U(64)
+```
+
+`18446744073709551614` lowers correctly, as do small literals, so this is an
+off-by-one at the boundary rather than general literal breakage. It bites any
+saturation or overflow guard, which is where `u64::MAX` naturally appears —
+`context.rs` guards its generation counter with `checked_add`. Restating the
+guard as `> MAX - 1` is the workaround.
+
+### G11: user structs have no `Copy`, so a field cannot be read twice
+
+```
+error[E0382]: use of moved value: `ctx.registers`
+```
+
+`enter` reads `ctx.registers` into both the updated context and the trap frame,
+which the source does freely because `Registers` derives `Clone, Copy`.
+Rebuilding the literal field by field is the workaround, and it scales badly:
+five fields here, and the reason `enter` is longer in `.th` than in Rust.
+
+### G12: the mutation-equivalence probe supports only scalar returns
+
+```
+equivalence obligation supports only scalar (u32/u64/usize/bool) returns;
+`resume` returns a non-scalar type (equivalent-mutants.md OQ-1)
+survivor COUNTED, not excluded
+```
+
+Every transition in a state machine returns `Result<Struct, Error>`. For those,
+equivalent mutants cannot be probed, so they are counted as survivors and the
+kill ratio is biased down: `resume` scores 9/18 against the §7 floor.
+
+This is a bias rather than a bar — `create` returns `Result<UserContext, _>` too
+and cleared the floor. But it means a non-scalar-returning transition needs a
+contract strong enough to overcome the counted survivors, and the failure it
+reports names the contract rather than the probe, which sends you looking in the
+wrong place.
+
+---
+
 ## Not gaps
 
 The kernel models are `unsafe`-free, and enforced as such: the one occurrence of

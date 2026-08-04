@@ -183,6 +183,41 @@ P3–P5 are the richer target, and they widen the dependency slice:
 [G4](language-gaps.md#g4-struct-fields-of-user-declared-types) covers this slice
 too. Widening the claim does not widen the blocker.
 
+## The port exists and partly certifies
+
+[`src/context.th`](../src/context.th) is the port, written 2026-08-03 against
+the pin. It does not certify as a whole, and it was written anyway: attempting it
+validated every non-struct part and surfaced six gaps that reading the reference
+had not.
+
+```
+L3   Privilege · CapabilityKind · TrapOrigin · ContextError
+L3   Registers · canonical · holds_rights
+L3   create        ← P3, P4, P5 discharged for all inputs
+L0   Capability · UserContext · TrapFrame       G4, upstream #122
+L0   enter · resume                             G12, non-scalar equivalence probe
+```
+
+**P3, P4 and P5 are proven.** `create` reaches L3, so no user context is
+constructed holding a kernel address, both pointers are canonical, and the stack
+is 16-byte aligned — for all inputs, against a contract whose mutants die. P1 and
+P2 are not, because the structs carrying them do not certify.
+
+That is the T0 claim standing at three of five, and it is worth being precise
+about which three: the ones that came from `create`, which the original MWE spec
+omitted entirely.
+
+The file carries two divergences from the source, both forced and both marked in
+place: the `CapabilityKind` variants take a `Cap` prefix
+([G8](language-gaps.md#g8-referencing-an-enum-variant-shadows-a-same-named-struct)),
+and the generation guard is restated as `> MAX - 1`
+([G10](language-gaps.md#g10-the-u64max-literal-lowers-to-u64max--1)).
+
+One contract error found here was mine rather than Thermite's: `enter`'s `Err`
+arm asserted `ctx.runnable || e == NotRunnable`, which a non-runnable context
+with a bad capability falsifies, since it returns `WrongCapability`. Corrected to
+the implication that holds.
+
 ## Blocked upstream
 
 T0 was described here and in [the roadmap](roadmap.md) as needing no language
