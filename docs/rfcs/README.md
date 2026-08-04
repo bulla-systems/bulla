@@ -11,6 +11,8 @@ What we do file upstream is **defects with reproductions**, which is a
 contribution rather than a request. RFC-1 is the only one currently in that
 state.
 
+| [000](000-surface-conventions.md) | all | surface conventions every other RFC assumes | **cross-cutting** |
+
 | RFC | rung | proposes | kind |
 |---|---|---|---|
 | [001](001-structured-spec-surface.md) | 1, 2 | complete the spec surface of structured data | **defect report** — four items, all reproduced |
@@ -62,6 +64,9 @@ A release rule that blocks axioms and `assume` needs a considered position on
 that trusted core. It is not disqualifying, and it should not be discovered late.
 
 ## Syntactic conventions used throughout
+
+Superseded in detail by [RFC-000](000-surface-conventions.md), which records the
+full-words decision and its rationale. Summary retained here:
 
 Chosen to match what the language already does, not to be novel.
 
