@@ -176,6 +176,20 @@ error[E0425]: cannot find type `Regs` in this scope
   |     pub regs: Regs,
 ```
 
+**Scope corrected 2026-08-04: this covers enums too.** The upstream report
+described a struct-field problem. Measured against enum variants, both payload
+forms fail identically:
+
+```thermite
+enum Ev  { Header { r: Regs }, Done }    // error[E0425]
+enum Ev2 { Header(Regs), Done }          // error[E0425]
+```
+
+So the accurate statement is that **the type graph must be one level deep**: no
+declared type may appear inside any other declared type, in any position. An enum
+variant carrying only primitives certifies at L3, which is what makes a
+transition-system style workable at all today.
+
 The per-struct check harness emits the field declaration without weaving in the
 declaration it references. A struct whose fields are all primitives certifies at
 L3, so the fault is specific to user-declared field types, and the containing
@@ -247,6 +261,36 @@ describing a contract in prose, which is how it got into an earlier draft of
 
 **Scope:** small, and a candidate for an upstream RFC: surface sugar desugaring
 to `!a || b`, with no change to the proof obligations.
+
+---
+
+## G13: no linear types, so a grant can be dropped
+
+**Status upstream:** not a defect. Thermite never claimed linear types; this is a
+requirement [the architecture](architecture.md#3-making-invariants-local-ownership-as-the-lever)
+places on the language, recorded rather than filed.
+
+Declared types are affine: they move rather than copy, and reuse is rejected.
+
+```thermite
+struct Tok { v: u64 }
+fn take(t: Tok) -> u64 req true ens result == t.v fx pure { t.v }
+fn twice(t: Tok) -> u64 ... { let a: u64 = take(t); let b: u64 = take(t); a + b }
+```
+```
+error[E0382]: use of moved value: `t`
+```
+
+That is what makes an ownership grant unforgeable, and it is the mechanism the
+meso position depends on. What is missing is the other half: nothing requires a
+grant to be *returned*. Affine types permit dropping; linear types would not.
+
+The consequence is a clean split in what the architecture can claim. Duplication
+is a safety property and is enforced. Leaking is a liveness property and is not,
+so resource exhaustion sits outside the model and the assurance claim says so.
+
+**Scope:** large, and a language-design question rather than a bug. Worth raising
+only once there is a verified subsystem whose grants it would apply to.
 
 ---
 

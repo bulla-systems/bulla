@@ -13,18 +13,42 @@ progress" status, since that is where overclaiming lives.
 | T3 | irq / device / dma | no DMA target overlaps kernel memory | [G1](language-gaps.md#g1-map-needs-remove-and-iteration): `remove` | NOT STARTED |
 | T4 | smp / sync / atomic | TLB shootdown correctness; lock safety | [G2](language-gaps.md#g2-no-concurrency-semantics), no concurrency semantics exist | NOT STARTED |
 
+## The tiers now follow the locality test
+
+The tiers below predate [the architecture pass](architecture.md) and were drawn
+from the shape of the forked Rust models. Section 4 of the architecture applies
+the invariant-locality test instead, and it moves two things:
+
+- **T4's subsystems split.** Interrupt routing and timekeeping have local
+  invariants and are admissible; the scheduler needs restructuring around an
+  affine runnability grant before it is; message passing and device transfer
+  isolation are OUT.
+- **T0's subject changes.** It was a port of `context.rs`. The port is stopped:
+  the upstream file is being withdrawn, and its nesting is what made it hit G4.
+  The execution-context subsystem stays IN, designed fresh.
+
+The tier table is kept because the blockers it records are still accurate. It
+will be redrawn against the architecture's verdicts once a subsystem is actually
+designed rather than listed.
+
 ## T0 is the whole near-term plan
 
 T0 was described here as requiring no language work, on the basis that enums with
 payloads, structs of fixed-width integers and booleans, and struct invariants are
-all shipped in Thermite. They are, individually. Combining them is what fails: a
-struct with a field of user-declared type does not certify
+all shipped in Thermite. They are, individually. Combining them is what fails: no
+declared type may appear inside another, in any position
 ([G4](language-gaps.md#g4-struct-fields-of-user-declared-types)), and every
 struct in the port has one.
 
 That correction came from attempting the port rather than from re-reading the
 survey, which is the general lesson. The claim "requires no language work" had
 never been executed.
+
+**The port is stopped.** `context.rs` is being withdrawn upstream, so porting it
+means porting code that will not exist, and its nesting is a consequence of being
+written for a language with a compositional type system. The execution-context
+subsystem remains admissible under the locality test and will be designed rather
+than ported.
 
 Doing T0 first and completely still matters, because it is the first claim this
 project will have made. What it proves is small; that it is proven, with a
