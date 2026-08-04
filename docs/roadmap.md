@@ -8,10 +8,10 @@ progress" status, since that is where overclaiming lives.
 | tier | subsystem | property worth proving | blocker | status |
 |---|---|---|---|---|
 | T0 | privilege / context | a context entered as User is never resumed with Kernel privilege; a stale generation is never resumable | [G4](language-gaps.md#g4-struct-fields-of-user-declared-types) / upstream [#122](https://github.com/dollspace-gay/Thermite/issues/122) | NOT STARTED |
-| T1 | capability ledger | no capability escalation; generation-safe revocation | `Vec` only, if the ledger scans linearly | NOT STARTED |
-| T2 | frame / memory | no physical frame is double-allocated | [G1](language-gaps.md#g1--map-lowering), `Map` lowering | NOT STARTED |
-| T3 | irq / device / dma | no DMA target overlaps kernel memory | [G1](language-gaps.md#g1--map-lowering) | NOT STARTED |
-| T4 | smp / sync / atomic | TLB shootdown correctness; lock safety | [G2](language-gaps.md#g2--no-concurrency-semantics), no concurrency semantics exist | NOT STARTED |
+| T1 | capability ledger | no capability escalation; generation-safe revocation | [G4](language-gaps.md#g4-struct-fields-of-user-declared-types) only; the G1 audit clears it | NOT STARTED |
+| T2 | frame / memory | no physical frame is double-allocated | [G1](language-gaps.md#g1-map-needs-remove-and-iteration): `remove` and iteration | NOT STARTED |
+| T3 | irq / device / dma | no DMA target overlaps kernel memory | [G1](language-gaps.md#g1-map-needs-remove-and-iteration): `remove` | NOT STARTED |
+| T4 | smp / sync / atomic | TLB shootdown correctness; lock safety | [G2](language-gaps.md#g2-no-concurrency-semantics), no concurrency semantics exist | NOT STARTED |
 
 ## T0 is the whole near-term plan
 
@@ -37,18 +37,20 @@ Every tier is gated on one small upstream fix,
 [G4](language-gaps.md#g4-struct-fields-of-user-declared-types), because 11 of the
 19 model files declare a struct with a user-declared field type and none of them
 certify today. After G4: T0 and T1 are gated on effort, T2 and T3 additionally on
-the [G1 audit](language-gaps.md#g1-map-coverage--open-question-not-a-gap), and T4
-on research.
+[G1](language-gaps.md#g1-map-needs-remove-and-iteration), and T4 on both G1 and
+research.
 
 G4 is therefore the critical path, and it is the smallest of the three.
 
-One language increment, G1, unblocks the subsystems behind T2 and T3. Finishing
-`Map` lowering is plausibly higher-leverage for this project than any kernel
-work, and it belongs upstream in Thermite.
+G1 is two `Map` operations rather than a missing capability: `remove`, which
+revocation and frame-free need, and iteration, which the schedulers and
+allocators need to traverse. Both belong upstream in Thermite. The audit that
+established this also cleared T1, whose only uncovered operation is `get_mut`,
+which is `get` followed by `insert` in a value-semantics language.
 
 ## T4 is the gate on ambition
 
-If [G2](language-gaps.md#g2--no-concurrency-semantics) gets an answer, monolithic
+If [G2](language-gaps.md#g2-no-concurrency-semantics) gets an answer, monolithic
 scope becomes arguable: more subsystems can live inside the verified core, and a
 large kernel with a per-clause manifest is on the table. If it does not, the
 separation-kernel shape is the maximum this approach reaches.

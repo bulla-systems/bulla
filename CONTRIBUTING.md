@@ -100,9 +100,15 @@ cargo install day --version 0.9.0-beta.1
 day doctor          # prints the supported kan range against the kan you have
 ```
 
-The versions matter. `day` 0.9.0-beta.1 supports kan `0.9.1..=0.9.1`, and a bare
-`cargo install kan` picks a release outside that range that `day` cannot talk to.
-`day doctor` prints the supported range alongside the kan you have.
+The versions matter, and the failure they prevent is silent. A bare
+`cargo install kan` selects a release `day` was never measured against; `day
+doctor` prints the range alongside the kan you have, and is the check to run.
+
+Above its measured range `day` warns rather than refusing, on the grounds that
+kan's read surface is additive. Observed here: `day` 0.9.0-beta.1 against kan
+0.9.2-beta.1 warns, and `assess`, `bridge check` and `doctor` all work. Treat
+that as tolerated rather than supported — the version above is the one this
+repository's process log was written with.
 
 This is authoring-time tooling under the rule above. It structures how work
 proceeds and is not a trust-bearing gate. A contributor who does not use it can

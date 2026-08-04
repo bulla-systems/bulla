@@ -9,7 +9,7 @@ wrong in the original survey and are corrected here.
 
 ---
 
-## G1: `Map` coverage — OPEN QUESTION, not a gap
+## G1: `Map` needs `remove` and iteration
 
 > **Corrected 2026-08-03.** This section previously claimed `Map` parses but does
 > not lower, and that 13 of 19 model files were blocked on
@@ -53,10 +53,41 @@ primitive keys. Three things need measuring against actual usage:
 3. **Non-primitive keys and values** — the conformance case is `u64 → u64`; the
    models key on newtypes and store structs.
 
-Until that audit runs, **G1 has no scope estimate and is not a blocker** — it is
-an unmeasured question. The audit is per-file and mechanical: enumerate every
-`BTreeMap` operation the models actually call, and check each against the
-lowering.
+### The audit, run 2026-08-03
+
+Every `BTreeMap` operation the models call, against the shipped
+`insert`/`get`/`contains_key`/`len` surface. 257 call sites: 150 covered, 107 not.
+
+The raw 42% overstates it, because two of the uncovered operations are mutation
+idioms rather than capabilities. `get_mut` (48 sites) and `entry` (4) are
+read-modify-write on a `&mut` binding, which in a value-semantics language is
+`get` followed by `insert`. `is_empty` (2) is `len() == 0` and `clear` (2) is a
+fresh `Map::new()`. None of those need anything from the lowering.
+
+What is left is two genuine capabilities:
+
+| missing | sites | where |
+|---|---|---|
+| `remove` | 24 | frame 12, dma 4, irq 2, memory 2, smp 2, services 2 |
+| iteration (`iter`, `values`) | 25 | frame 10, memory 5, scheduler 4, smp 2, sync 2, services 2 |
+
+Per tier, which is what decides the roadmap:
+
+| tier | models | needs |
+|---|---|---|
+| T1 capability ledger | `capability` | nothing — its only uncovered op is `get_mut` |
+| T2 frame / memory | `frame`, `memory` | `remove` and iteration |
+| T3 irq / device / dma | `irq`, `dma`, `device` | `remove` |
+| T4 smp / sync / atomic | `smp`, `sync`, `atomic` | `remove` and iteration |
+
+**G1 is a real gap, and smaller than first described.** It is two operations, not
+a missing `Map`. T1 is not blocked by it at all, which the original framing had
+wrong in the other direction. Revocation needs `remove`; the schedulers and
+allocators need to traverse.
+
+Whether iteration is even expressible under the bounded Vec-of-pairs backing is
+the open design question — a `forall` over the domain may serve the contracts
+without an iteration primitive in exec position. That is upstream's call.
 
 ---
 
@@ -155,7 +186,7 @@ memory 2 · registry 2 · scheduler 1 · services 1 · smp 1 · sync 1
 another record is the ordinary shape for these subsystems, so it is not a corner
 they can be written around.
 
-With [G1](#g1-map-coverage--open-question-not-a-gap) reduced to an unmeasured
+With [G1](#g1-map-needs-remove-and-iteration) reduced to an unmeasured
 question, G4 is the only confirmed blocker in this document, and it sits upstream
 of every tier.
 
