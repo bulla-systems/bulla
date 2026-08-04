@@ -42,6 +42,13 @@ or not the invariants are local.
 
 ## 2. The meso position
 
+> **Revised 2026-08-04.** This section originally argued for a fixed position
+> between microkernel and monolith. That framing is superseded by
+> [the ladder](the-ladder.md): the position is a **rung**, and it moves as the
+> language gains capability. The locality principle below is still what decides
+> admission *at a given rung*; what changes is that the set of admissible
+> subsystems grows rather than being settled once.
+
 A *microkernel* minimises `n`. A *monolithic* kernel maximises it and verifies
 none of it. Bulla takes a middle position, and needs a principle rather than a
 preference, because "somewhat more than a microkernel" is not an engineering
@@ -96,7 +103,18 @@ unforgeable.
 What Thermite does **not** provide is a way to require that a grant is eventually
 returned. Affine types permit dropping; linear types would not. The discipline
 prevents *duplication* but not *leaks*. Duplication is the safety property;
-leaking is liveness, and this architecture makes no liveness claims.
+leaking is liveness, and this architecture makes no liveness claims. Closing that
+gap is [RFC-004](rfcs/004-linear-types.md), and it is rung 5.
+
+**A caveat on this section, recorded rather than smoothed over.** Affinity is
+enforced by rustc against the *lowered* code, and Thermite has no ghost or
+tracked state, so "at most one grant exists" cannot appear as a premise in any
+`req`, `ens`, or `inv`. It is a frame condition enforced outside the proof, not a
+lemma usable inside it. What survives is narrower and still real: the allocator's
+own issued-set invariant is statable and local, and affinity turns double-release
+from *detected* into *unrepresentable*. The stronger reading — ownership as data
+in a `Map`, provable rather than merely enforced — needs
+[RFC-001](rfcs/001-structured-spec-surface.md).
 
 ## 4. Applying the test
 
@@ -175,6 +193,12 @@ What remains expressible is genuinely useful:
 structure is available *inside enum variants* even though it is unavailable
 across declarations. That is a real expressive resource, and the reason a
 transition-system style works at all today.
+
+> **Scope note.** G4 concerns *user-declared* types. Builtin generics over
+> primitives are unaffected: `Vec<u64>` and `Map<u64,u64>` are fine as struct
+> fields and enum payloads, both at L3. So the universe is flat with respect to
+> declarations, not with respect to structure — which is less binding than §5.2
+> originally implied.
 
 ### 5.2 What flatness costs, and why it costs a meso design more
 

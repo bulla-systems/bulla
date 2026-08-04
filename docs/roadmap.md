@@ -1,5 +1,11 @@
 # Roadmap
 
+> **Superseded as the primary roadmap, 2026-08-04.** [The ladder](the-ladder.md)
+> is where the plan now lives: rungs of proof capability, each with the kernel it
+> buys and the language work it needs. This document's tier table is retained
+> because the blockers it records are accurate, and because T0–T4 are still the
+> subsystem-level increments once a rung is reached.
+
 Five tiers, each naming its blocker. A tier is SHIPPED when it is end-to-end
 functional with a non-test consumer, tests, and verification evidence, and
 NOT STARTED otherwise, with a concrete open prerequisite. There is no "in
