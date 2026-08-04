@@ -53,41 +53,58 @@ primitive keys. Three things need measuring against actual usage:
 3. **Non-primitive keys and values** — the conformance case is `u64 → u64`; the
    models key on newtypes and store structs.
 
-### The audit, run 2026-08-03
+### The audit, corrected 2026-08-03
 
-Every `BTreeMap` operation the models call, against the shipped
-`insert`/`get`/`contains_key`/`len` surface. 257 call sites: 150 covered, 107 not.
+> **The first run of this audit was wrong and its numbers were published
+> upstream.** It summed two overlapping regexes, so every `self.field.method()`
+> call counted twice: 257 sites reported against 130 actual, with every
+> per-operation figure exactly doubled. It also listed `len` as available in exec
+> position, which it is not. Corrected below against a receiver-typed,
+> position-deduplicated count, which agrees operation-for-operation with an
+> independent measurement from the Thermite side. The upstream issue carries the
+> correction.
 
-The raw 42% overstates it, because two of the uncovered operations are mutation
-idioms rather than capabilities. `get_mut` (48 sites) and `entry` (4) are
-read-modify-write on a `&mut` binding, which in a value-semantics language is
-`get` followed by `insert`. `is_empty` (2) is `len() == 0` and `clear` (2) is a
-fresh `Map::new()`. None of those need anything from the lowering.
+**The shipped exec surface is three operations.** From `emit_one_map_wrapper` in
+`thermite-lower/src/lower.rs`:
 
-What is left is two genuine capabilities:
+| | |
+|---|---|
+| executable | `insert`, `get`, `contains_key` |
+| spec-only | `len`, `spec_contains_key`, `spec_dom`, `well_formed` |
 
-| missing | sites | where |
+`len` is a `pub open spec fn`, so there is no executable size or emptiness test.
+`remove`, `iter`, `values` and `keys` appear nowhere in `thermite-syntax`,
+`thermite-lower` or `thermite-spec`.
+
+**The models call twelve distinct operations across 130 sites:**
+
+```
+insert 37 · get 27 · get_mut 24 · remove 12 · contains_key 11 · iter 9
+values 4 · entry 2 · clone 1 · clear 1 · is_empty 1 · take 1
+```
+
+Rewritable against the shipped surface: `get_mut` and `entry` become
+`get`/modify/`insert`, since `insert` overwrites; `clear` becomes a rebind;
+`clone` and `take` are local.
+
+Not rewritable:
+
+| missing | sites | files |
 |---|---|---|
-| `remove` | 24 | frame 12, dma 4, irq 2, memory 2, smp 2, services 2 |
-| iteration (`iter`, `values`) | 25 | frame 10, memory 5, scheduler 4, smp 2, sync 2, services 2 |
+| `remove` | 12 | dma, frame, irq, memory, services, smp |
+| iteration (`iter`, `values`) | 13 | frame, memory, scheduler, services, sync |
+| `is_empty` | 1 | memory — blocked too, because `len` is spec-only |
 
-Per tier, which is what decides the roadmap:
+Together they touch **8 of the 19 model files**.
 
-| tier | models | needs |
-|---|---|---|
-| T1 capability ledger | `capability` | nothing — its only uncovered op is `get_mut` |
-| T2 frame / memory | `frame`, `memory` | `remove` and iteration |
-| T3 irq / device / dma | `irq`, `dma`, `device` | `remove` |
-| T4 smp / sync / atomic | `smp`, `sync`, `atomic` | `remove` and iteration |
+**So G1 is surface coverage rather than existence.** `Map` lowers and works; it
+is missing two operations the kernel models need. Per tier: T1 needs neither and
+is clear, T3 needs `remove`, and T2 and T4 need both.
 
-**G1 is a real gap, and smaller than first described.** It is two operations, not
-a missing `Map`. T1 is not blocked by it at all, which the original framing had
-wrong in the other direction. Revocation needs `remove`; the schedulers and
-allocators need to traverse.
-
-Whether iteration is even expressible under the bounded Vec-of-pairs backing is
-the open design question — a `forall` over the domain may serve the contracts
-without an iteration primitive in exec position. That is upstream's call.
+Whether iteration needs an exec-position primitive is the open design question.
+Every use in the models is a fold or a search whose contract is a `forall` over
+the domain, and `spec_dom` already exists, so the contracts may be writable
+without an iterator.
 
 ---
 

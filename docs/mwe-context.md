@@ -32,6 +32,21 @@ with `Kernel` privilege.
 **P2, generation safety.** A context whose generation does not match the current
 epoch is never resumable.
 
+**P3, no kernel address.** A user context is never created holding an
+instruction or stack pointer at or above `0x0000_8000_0000_0000`.
+
+**P4, canonical addresses.** Both pointers satisfy the x86-64 canonical form.
+
+**P5, stack alignment.** The stack pointer is 16-byte aligned.
+
+> **P3–P5 added 2026-08-03.** The original three claims stopped at P1 and P2.
+> P1 is carried structurally by the `TrapFrame` invariant, which is elegant and
+> makes it close to free to prove: both constructors write the literal, so there
+> is no transition that could violate it. P3–P5 come from `create`
+> (`kernel/src/context.rs:58`) and have content — each is a range or bit
+> predicate over a `u64` that a wrong constant falsifies concretely, which is
+> what criterion 5 needs to bite against.
+
 ## Sketch
 
 > **Corrected against the source on 2026-08-03.** The earlier sketch put a
@@ -89,21 +104,45 @@ returns `WrongPrivilege`. Under the invariant that branch is unreachable, which
 is a result in itself: the proof is stronger than the runtime check, and
 discharging P1 should show the check to be dead rather than load-bearing.
 
-The three transitions to port, with the signatures `context.rs` has. Thermite
-has no `impl` blocks, so these are free functions taking the context by value and
+The transitions to port, with the signatures `context.rs` has. Thermite has no
+`impl` blocks, so these are free functions taking the context by value and
 returning the new one. It also has **no implication operator**: `==>` is not in
 the grammar, and a conditional postcondition is written `!a || b`. Payloads are
 projected with `match` in `ens` rather than `.is_ok()` or `.unwrap()`, neither of
 which exists.
 
+> **`enter` corrected 2026-08-03.** An earlier sketch had
+> `enter(ctx, cap) -> Result<TrapFrame, ContextError>`, which drops a mutation:
+> `context.rs:97` sets `self.runnable = false` before returning the frame. With
+> that lost, the `NotRunnable` guard at `:94` can never fire on a second call,
+> and the enter/resume cycle P1 and P2 describe does not hold. `enter` has the
+> same `&mut`-plus-return shape as `resume` and has to return both halves.
+
 ```thermite
-fn enter(ctx: UserContext, cap: Capability) -> Result<TrapFrame, ContextError>
+fn create(cap: Capability, id: u32, space: u32, ip: u64, sp: u64)
+    -> Result<UserContext, ContextError>
   req true
   ens match result {
-        Ok(f)  => f.privilege == Privilege::User
-                  && f.generation == ctx.generation
-                  && f.context == ctx.id,
-        Err(e) => !ctx.runnable || e != ContextError::NotRunnable,
+        Ok(c)  => c.registers.instruction_pointer < 0x0000_8000_0000_0000   // P3
+                  && c.registers.stack_pointer < 0x0000_8000_0000_0000      // P3
+                  && canonical(c.registers.instruction_pointer)             // P4
+                  && canonical(c.registers.stack_pointer)                   // P4
+                  && c.registers.stack_pointer % 16 == 0                    // P5
+                  && c.generation == 0 && c.runnable,
+        Err(e) => true,
+      }
+  fx  pure
+
+fn enter(ctx: UserContext, cap: Capability)
+    -> Result<(UserContext, TrapFrame), ContextError>
+  req true
+  ens match result {
+        Ok(pair) => !pair.0.runnable                       // the mutation, kept
+                    && pair.0.generation == ctx.generation
+                    && pair.1.privilege == Privilege::User
+                    && pair.1.generation == ctx.generation
+                    && pair.1.context == ctx.id,
+        Err(e)   => ctx.runnable || e == ContextError::NotRunnable,
       }
   fx  pure
 
@@ -125,6 +164,24 @@ context's, and success advances the epoch by one. A false clause yields a
 concrete `(frame.generation, ctx.generation)` pair. The `checked_add` in the
 source makes `GenerationOverflow` a real branch needing its own clause rather
 than an assumed-total increment.
+
+`canonical` is a `spec fn` over the source's `is_canonical_x86_64`
+(`kernel/src/memory.rs:419`), which is six lines of shifts and comparisons and
+ports directly.
+
+## What `create` pulls in
+
+P3–P5 are the richer target, and they widen the dependency slice:
+
+- `capability.rs` — `Capability`, `CapabilityKind` (19 unit variants), and
+  `Rights`. `Rights` is a hand-rolled `pub struct Rights(u32)` with const bit
+  constants and plain `union`/`contains` methods rather than a `bitflags!`
+  macro, so it ports as a `u32` newtype with `&`-based predicates.
+- `memory.rs` — `is_canonical_x86_64` only.
+
+`Capability` has user-declared field types of its own, so
+[G4](language-gaps.md#g4-struct-fields-of-user-declared-types) covers this slice
+too. Widening the claim does not widen the blocker.
 
 ## Blocked upstream
 
@@ -169,14 +226,21 @@ This section exists in every claim the project makes.
 ```
 P1  all / complete   / solver  @ to_platform(x86_64-pc-uefi-smp-v1)
 P2  all / complete   / solver  @ to_platform(x86_64-pc-uefi-smp-v1)
+P3  all / complete   / solver  @ to_platform(x86_64-pc-uefi-smp-v1)
+P4  all / complete   / solver  @ to_platform(x86_64-pc-uefi-smp-v1)
+P5  all / complete   / solver  @ to_platform(x86_64-pc-uefi-smp-v1)
 ```
 
 `to_platform` rather than `e2e` because the transition bodies are registry
 boundaries. `solver` rather than `lean-checked` unless the clauses land in a
-reconstructible fragment, which is worth checking: these are equality and
-implication claims over fixed-width integers and enums, which is QF_LIA
+reconstructible fragment, which is worth checking: these are equality, range and
+bit predicates over fixed-width integers and enums, which is QF_BV and QF_LIA
 territory. If reconstruction applies, the trust coordinate improves to
 `lean-checked` and no other coordinate changes.
+
+P4 is the one to watch: `is_canonical_x86_64` is two shifts and a comparison, so
+it lands in bitvector reasoning rather than linear arithmetic, and the two
+fragments do not always mix well in one query.
 
 ## Acceptance
 
@@ -186,9 +250,20 @@ territory. If reconstruction applies, the trust coordinate improves to
    reboot
 4. The published image carries a certificate naming P1, P2, their tuples, and
    the boundary set they close against
-5. A broken transition, resuming with `Kernel` privilege, is rejected at check
-   time, with the counterexample recorded in the test suite as a pinned
-   regression
+5. Each of these deliberate breaks is rejected at check time, with the
+   counterexample recorded as a pinned regression:
+
+   | break | should fail |
+   |---|---|
+   | resume with `Kernel` privilege | P1 |
+   | accept a frame whose generation differs | P2 |
+   | widen the kernel-address bound to `0x0001_0000_0000_0000` | P3 |
+   | drop the `is_canonical_x86_64` check on the stack pointer | P4 |
+   | change the alignment mask from `0xf` to `0x7` | P5 |
+
+   P1's break is the weakest of the five, because the `TrapFrame` invariant makes
+   it unconstructible rather than unprovable. P3 and P5 are the ones where a
+   wrong constant produces a concrete falsifying address.
 
 Criterion 5 carries the weight. A verification claim that has never been seen to
 fail is not yet evidence.
