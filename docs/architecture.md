@@ -261,6 +261,63 @@ This is the same form TMK uses, arrived at from section 1 rather than adopted.
 Independent convergence is mild evidence that it is the shape the language
 affords.
 
+### 6.1 Operations that do not finish in one step
+
+`step` is total, so every call returns. Several things a kernel does cannot
+finish in bounded time in one call: walking a four-level page table, copying an
+IPC payload, bringing a device up. The shape above says nothing about them, and
+the usual answer — block, or spawn a task — needs a scheduler, which is one of
+the things being verified.
+
+The answer that fits is to make the continuation **data**:
+
+```thermite
+enum Walk { Ready { addr: u64 }, Pending { level: u32, index: u64 } }
+
+struct WalkState { level: u32, index: u64, base: u64 }
+  inv level <= 4
+
+fn advance(s: WalkState) -> Walk
+  req  s.level <= 4 && s.index < 512
+  ens  match result {
+         Walk::Ready { addr }            => s.level == 0,
+         Walk::Pending { level, index }  => level < s.level,
+       }
+  fx   pure
+```
+
+The operation's resumption point is a value the caller holds and the checker can
+reason about, rather than a program counter inside a suspended frame. The
+postcondition above is where it pays: `level < s.level` is a decreasing measure
+on the operation as a whole, so the walk terminates across calls and not merely
+within one.
+
+**Verified, not asserted.** Both items certify at **L3** at the pin.
+
+This is async's shape without async's mechanism. An `async fn` compiles to a
+compiler-generated state machine whose states, resume points and captured locals
+exist only in generated code — which is what makes it hard to verify, and why
+the pinned Verus ships `vstd/future.rs` as 45 lines of `uninterp` stubs that can
+name a future's output and prove nothing about it. Writing the state machine by
+hand is what makes it a thing a contract can point at.
+
+Three constraints, all current:
+
+- **No user generics** ([G3](language-gaps.md#g3-no-user-defined-generics)), so
+  `Step<A>` is monomorphised per operation. A kernel has few long operations, so
+  this costs little.
+- **Enum payloads are primitives**
+  ([G4](language-gaps.md#g4-struct-fields-of-user-declared-types)), so a
+  continuation is a flat record. That is the §5.3 encoding rule applied again.
+- **Variant paths must be qualified** in a contract. The unqualified form fails
+  with `error[E0422]` reported as a harness-construction fault, which names the
+  wrong cause.
+
+What it buys the architecture is bounded work per entry. A core that must not
+spend unbounded time inside one call needs every long operation to be
+interruptible at a point where its invariant holds, and this makes those points
+the only points that exist.
+
 ## 7. Privileged operations: the core performs none
 
 A verified kernel reaches the machine eventually. Two mechanisms, differing in
