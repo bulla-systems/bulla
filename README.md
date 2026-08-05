@@ -55,11 +55,13 @@ inside, and you cannot alter one without destroying the other.
 |---|---|
 | Linux | ~30M lines of ring-0 C, unreadable in practice |
 | seL4 | ~10k lines plus Isabelle proofs requiring expert maintenance |
-| Bulla | a frozen operation registry plus its bound bodies, with a certificate for everything above it |
+| Bulla | a shell that interprets a fixed alphabet of described effects, with a certificate for everything above it |
 
-The differentiator is proof mechanism rather than proof volume: the boundary
-between trusted and proven is enforced by the build. A privileged operation that
-does not appear in the registry cannot be called.
+The differentiator is proof mechanism rather than proof volume. The verified core
+performs no privileged operations at all: it computes descriptions of effects, and
+a shell outside it performs them. The trusted base is therefore bounded by the
+alphabet of effects rather than by how much of the kernel is verified, so it does
+not grow as the core does. See [the architecture](docs/architecture.md#7-privileged-operations-the-core-performs-none).
 
 ## Product shape
 
@@ -80,7 +82,9 @@ The path is (1) → (2). (3) is a direction rather than a destination.
 
 | | |
 |---|---|
-| [Architecture](docs/architecture.md) | the four layers, the boundary registry, and how a `.th` program becomes a bootable image |
+| [The ladder](docs/the-ladder.md) | the roadmap: each rung is a proof capability, and what kernel it buys |
+| [Architecture](docs/architecture.md) | where the verified core begins and ends, and why the line sits there |
+| [RFCs](docs/rfcs/) | the language proposals each rung needs |
 | [Products](docs/products.md) | the `separation` and `monolithic` profiles, and what decides whether the second is real |
 | [Assurance model](docs/assurance-model.md) | what a certificate claims, and the vocabulary for saying it |
 | [Roadmap](docs/roadmap.md) | T0–T4, with the blocker for each tier named |
@@ -94,16 +98,21 @@ The path is (1) → (2). (3) is a direction rather than a destination.
 
 ## Relationship to prior work
 
-The platform layer, boundary registry, and bring-up code this project builds on
-were written by [dollspace.gay](https://github.com/dollspace-gay) in the Thermite
-repository: a fifteen-field boundary matcher, fail-closed registry policies,
-sealed capability kinds, and a host-deterministic image build. That work is the
-reason this project starts here rather than from scratch.
+Bulla forked its bring-up and image-build scaffolding from
+[dollspace.gay](https://github.com/dollspace-gay)'s Thermite repository. That work
+is the reason this project starts here rather than from scratch, and the
+host-deterministic image build it provided is still the base of everything Bulla
+publishes.
 
-What it did not have was a verified payload. The kernel subsystems were modeled
-in ordinary Rust rather than proven in Thermite, and the assurance table
-described the architecture's capacity rather than its contents. Bulla forks the
-scaffolding and builds the thing it was designed to carry.
+The kernel layer of it is being withdrawn upstream, and Bulla's architecture no
+longer depends on it — see
+[what changed](docs/architecture.md#10-what-changed-from-the-inherited-architecture).
+
+[Thermite-Microkernel](https://github.com/dollspace-gay/Thermite-Microkernel) is a
+verified microkernel by the same author, further along than Bulla in proof
+content. Bulla is not a second one: it is investigating how much more can sit
+inside a verified core than a microkernel admits, which means it meets the
+language's limits sooner and reports them.
 
 ## License
 

@@ -42,7 +42,7 @@ no agent tooling satisfies every requirement by running these:
 
 | target | what it establishes |
 |---|---|
-| `make check-fork` | every forked file matches the [upstream pin](docs/upstream-pin.md), or is a listed divergence with a reason |
+| `make check-fork` | every forked file matches the [upstream pin](docs/upstream-pin.md), or is a listed divergence with a reason. Files under `src/` with no upstream counterpart are Bulla-authored and reported as such; anything new under `platform/` or `kernel/` is drift |
 | `make image` | the image builds from this tree through `forge` at the pin |
 | `make verify` | the receipt's bindings re-check against current source |
 | `make determinism` | two independent builds on this host are byte-identical |
