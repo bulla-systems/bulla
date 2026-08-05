@@ -413,11 +413,69 @@ Every transition in a state machine returns `Result<Struct, Error>`. For those,
 equivalent mutants cannot be probed, so they are counted as survivors and the
 kill ratio is biased down: `resume` scores 9/18 against the §7 floor.
 
-This is a bias rather than a bar — `create` returns `Result<UserContext, _>` too
-and cleared the floor. But it means a non-scalar-returning transition needs a
-contract strong enough to overcome the counted survivors, and the failure it
-reports names the contract rather than the probe, which sends you looking in the
-wrong place.
+> **Corrected and isolated 2026-08-04.** This section previously said the effect
+> is "a bias rather than a bar", on the evidence that `create` returns
+> `Result<UserContext, _>` and cleared the floor. **It is a bar.** A matched pair
+> shows it flipping an honest contract from passing to falsely gated, with the
+> return type as the only difference.
+
+Both bodies below have **identical branches**, so every mutation of the `if`
+condition is observably equivalent to the real body and none of them is evidence
+of a weak contract:
+
+```thermite
+fn pick(x: u64) -> u64
+  req x < 10
+  ens result == x
+  fx pure
+{ if x < 5 { x } else { x } }
+```
+```
+mutants killed: 1/1        non-vacuous
+```
+
+```thermite
+struct Ctx { generation: u64 }
+
+fn pick(c: Ctx) -> Result<Ctx, u64>
+  req c.generation < 10
+  ens match result { Ok(n) => n.generation == c.generation, Err(e) => false }
+  fx pure
+{ if c.generation < 5 { Ok(Ctx { generation: c.generation }) }
+  else { Ok(Ctx { generation: c.generation }) } }
+```
+```
+mutation kill ratio 0/4 is below the floor
+VACUOUS — WeakContract
+```
+
+The denominators carry the finding. The same operators generate the same mutants
+for the same body shape; the scalar contract is scored against **1** and the
+struct contract against **4**. The three the scalar run does not count are the
+ones its equivalence probe proved equivalent and dropped. The struct run cannot
+run that probe, so it counts them, reaches 0/4, and reports the contract as weak.
+
+The message names the contract and tells you to strengthen the `ens`. There is
+nothing to strengthen: the mutants are equivalent, and no postcondition
+distinguishes bodies that cannot be distinguished.
+
+**It is not a semantics gap.** `equivalent-mutants.md` OQ-1 states the
+formulation already generalises — "the spec-fn pair returns the wrapper type and
+`ensures` its `==`" — and only the scalar arm is grounded. So this is an
+unimplemented arm with a written design, in the same class as
+[G4](#g4-struct-fields-of-user-declared-types).
+
+**What it blocks.** Not the design of anything in [docs/rfcs/](rfcs/) — it
+touches no surface and no proposal depends on it. It blocks the *evidence*: while
+it stands, no step-shaped subsystem can be shown meeting the §7 floor, because
+`step : State × Event → State × Action` returns a struct by construction
+([architecture §6](architecture.md#6-the-shape-of-a-verified-subsystem)). Every
+transition Bulla intends to write is in the affected class.
+
+The second half of the question is
+[unexamined upstream and answered here](rfcs/interference-clauses.md#how-these-clauses-are-scored):
+mutation scores a contract by mutating the *body*, and an `asks` clause is not a
+claim about the body at all.
 
 ---
 
