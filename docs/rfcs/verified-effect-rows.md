@@ -1,4 +1,4 @@
-# RFC-002 — Verified effect rows, and regions
+# Verified effect rows
 
 **Rung 3.** Kind: extension to an existing mandatory clause.
 
@@ -81,7 +81,7 @@ concurrent shootdown_protocol { ack, complete }
 aliasing. Two functions each acquiring two regions in opposite orders both pass.
 That needs a region partial order, and it is a real gap in this proposal.
 
-**It does not help with lock-free sharing.** That is [RFC-005](005-interference-clauses.md).
+**It does not help with lock-free sharing.** That is [interference clauses](interference-clauses.md).
 
 **Interrupts are concurrency too**, and this is the kernel-specific case with no
 userspace analogue. A handler preempts normal context on the *same* CPU, so

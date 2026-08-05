@@ -104,7 +104,7 @@ What Thermite does **not** provide is a way to require that a grant is eventuall
 returned. Affine types permit dropping; linear types would not. The discipline
 prevents *duplication* but not *leaks*. Duplication is the safety property;
 leaking is liveness, and this architecture makes no liveness claims. Closing that
-gap is [RFC-004](rfcs/004-linear-types.md), and it is rung 5.
+gap is [resource types](rfcs/resource-types.md), and it is rung 5.
 
 **A caveat on this section, recorded rather than smoothed over.** Affinity is
 enforced by rustc against the *lowered* code, and Thermite has no ghost or
@@ -114,7 +114,7 @@ lemma usable inside it. What survives is narrower and still real: the allocator'
 own issued-set invariant is statable and local, and affinity turns double-release
 from *detected* into *unrepresentable*. The stronger reading — ownership as data
 in a `Map`, provable rather than merely enforced — needs
-[RFC-001](rfcs/001-structured-spec-surface.md).
+[the spec surface](rfcs/structured-spec-surface.md).
 
 ## 4. Applying the test
 

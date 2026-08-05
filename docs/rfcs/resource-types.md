@@ -1,4 +1,4 @@
-# RFC-004 — Linear types
+# Resource types
 
 **Rung 5.** Kind: surface an existing capability.
 

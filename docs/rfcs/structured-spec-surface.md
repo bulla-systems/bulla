@@ -1,4 +1,4 @@
-# RFC-001 — Complete the spec surface of structured data
+# Complete the spec surface of structured data
 
 **Rungs 1 and 2.** Kind: **defect report**, not a feature request. Every item
 below is something the language already intends to support, reproduced against

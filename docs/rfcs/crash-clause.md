@@ -1,4 +1,4 @@
-# RFC-007 — A `crash` clause for durable state
+# The crash clause
 
 **Unscheduled.** Kind: one new clause, shaped like `ens`.
 
@@ -20,7 +20,7 @@ crash:   I(s) ∧ crash(s, d) ∧ recover(d) = s′ ⟹ I(s′)
 ```
 
 Structurally that is *a relation you do not control interfering with your step* —
-the same shape as [RFC-005](005-interference-clauses.md)'s `<~`, with the
+the same shape as [interference clauses](interference-clauses.md)'s `<~`, with the
 environment being physics rather than another CPU.
 
 ## Proposal

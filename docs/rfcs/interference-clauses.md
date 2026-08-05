@@ -1,17 +1,17 @@
-# RFC-005 — Interference clauses: `<~` and `~>`
+# Interference clauses
 
 **Rung 6.** Kind: two new clauses, shaped like `req` and `ens`.
 
-## What it adds over RFC-002 and RFC-003
+## What it adds over the effect-rows RFC and the shared-state-invariants RFC
 
 | | covered by |
 |---|---|
-| disjoint state | RFC-002 |
-| shared, serialised | RFC-003 |
+| disjoint state | the effect-rows RFC |
+| shared, serialised | the shared-state-invariants RFC |
 | **shared, lock-free, monotone** | **this** |
 | shared, lock-free, arbitrary | needs full CSL/Iris; out of scope |
 
-RFC-003's vocabulary is *"nobody touches this while I hold it"*. This RFC's is
+the shared-state-invariants RFC's vocabulary is *"nobody touches this while I hold it"*. This RFC's is
 *"others may touch it, in these ways"* — a **weaker guarantee than mutual
 exclusion**, which is what lets a read proceed without a lock.
 
@@ -32,7 +32,7 @@ fn ack(s: &mut Shoot, cpu: u64) -> ()
 **relations** between two states — duration. Direction says who acts: `<~`
 arrives at me, `~>` leaves me.
 
-The arrows rhyme with [RFC-006](006-protocol-types.md) without colliding:
+The arrows rhyme with [protocol types](protocol-types.md) without colliding:
 straight `->` `<-` for discrete **messages**, squiggly `~>` `<~` for ambient
 **state drift**.
 
@@ -41,7 +41,7 @@ needed, consistent with the language's treatment of clause absence as meaningful
 
 ## Composition
 
-At the site declared by RFC-002:
+At the site declared by the effect-rows RFC:
 
 ```thermite
 concurrent shootdown { ack, complete }
@@ -96,8 +96,8 @@ Verus's existing soundness. Someone should check that before proposing it.
 ## Sequencing
 
 This is the right *third* thing. Everything it enables is an optimisation of
-something RFC-003 already expresses correctly but slowly. Build RFC-002 and
-RFC-003, find out empirically which paths hurt, then write these contracts for
+something the shared-state-invariants RFC already expresses correctly but slowly. Build the effect-rows RFC and
+the shared-state-invariants RFC, find out empirically which paths hurt, then write these contracts for
 those call sites — where you will know exactly what they need to say.
 
 ## Dependency

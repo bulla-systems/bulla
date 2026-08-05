@@ -421,6 +421,55 @@ wrong place.
 
 ---
 
+## G14: a loop has no `diverge` exemption, so an infinite loop needs a false measure
+
+**Status upstream:** not filed. Found on 2026-08-04 by probe during the surface
+pass.
+
+A recursive `fn` may decline to prove termination by declaring the effect, and
+the checker says so itself:
+
+```
+recursive function `countdown` must have a decreases clause — a `fn` that calls
+itself MUST supply a `dec <measure>` so termination is proved (§4.1;
+`.design/basis/10-recursion-tuples.md` REQ-2), UNLESS it declares `fx diverge`
+```
+
+Taking that exemption costs assurance rather than being free: the same function
+certifies at **L1** with `fx diverge` where it would reach L3 with a measure.
+That is a good design — divergence is available, priced, and visible in the
+certificate.
+
+The exemption does not reach loops. A loop requires `dec` even when the enclosing
+function declares `fx diverge`:
+
+```thermite
+fn idle() -> u64
+  req true
+  ens result == 0
+  fx diverge
+{ let mut i: u64 = 0; while true inv i >= 0 { i = i + 1; } 0 }
+```
+```
+forge: parse failed (1 error(s)):
+  - function `loop` is missing the mandatory `dec` clause
+```
+
+Adding `dec 0` makes it certify at L1. So an intentionally infinite loop — a
+scheduler idle loop, an event loop, the most ordinary construct in a kernel — is
+only writable by supplying a measure that cannot strictly decrease, and the false
+measure then sits in the source where a later reader will believe it.
+
+Worth noting the asymmetry that is *not* a gap: `spec fn` requires a measure with
+no exemption, recursive or not. That is correct, because a spec function is used
+in logic and a non-total one would be unsound.
+
+**Scope:** small. Extend the `UNLESS it declares fx diverge` exemption from
+functions to the loops inside them, so an infinite loop is written by omitting
+the measure rather than by faking one.
+
+---
+
 ## Not gaps
 
 The kernel models are `unsafe`-free, and enforced as such: the one occurrence of

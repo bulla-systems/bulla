@@ -1,10 +1,10 @@
-# RFC-003 — Invariant-guarded shared state
+# Invariant-guarded shared state
 
 **Rung 4.** Kind: extension reusing `inv`.
 
 ## Summary
 
-[RFC-002](002-verified-effect-rows.md) permits only disjoint concurrent access.
+[verified effect rows](verified-effect-rows.md) permits only disjoint concurrent access.
 This permits *shared* access, serialised, with the invariant holding at every
 boundary.
 
@@ -51,5 +51,5 @@ substrate is present.
   `owns(r)`? The simple answer is no, and it should be stated rather than
   discovered.
 - **Ordering.** `owns(a), owns(b)` in one function and `owns(b), owns(a)` in
-  another deadlocks and both typecheck. Same gap as RFC-002; a region partial
+  another deadlocks and both typecheck. Same gap as the effect-rows RFC; a region partial
   order would close both at once.

@@ -1,6 +1,6 @@
-# RFC-006 — Protocol types for channels
+# Protocol types for channels
 
-**Rung 7.** Kind: new item form. Orthogonal to RFC-002 through RFC-005.
+**Rung 7.** Kind: new item form. Orthogonal to the effect-rows RFC through the interference-clauses RFC.
 
 ## Summary
 
@@ -61,7 +61,7 @@ substantially harder — this RFC proposes binary only.
 ## Open questions
 
 - **Linearity of channel endpoints.** A session channel must be used exactly
-  once per step, which is [RFC-004](004-linear-types.md). This RFC probably
+  once per step, which is [resource types](resource-types.md). This RFC probably
   depends on that one.
 - **Failure.** What is the protocol type of a partition that crashes mid-session?
   Real systems need a cancellation story and session types are traditionally

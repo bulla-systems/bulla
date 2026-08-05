@@ -16,13 +16,13 @@ implements; [docs/rfcs/](rfcs/) holds the language proposals each rung needs.
 | rung | proof capability | language work | the system you could ship |
 |---|---|---|---|
 | **0** | scalar invariants | — *(have it)* | fixed programs in isolation, one CPU. Not a Unix. |
-| **1** | structural predicates over recursive data | [RFC-1](rfcs/001-structured-spec-surface.md) | **a Unix, running unverified, inside a verified box** |
-| **2** | predicates over bounded collections | [RFC-1](rfcs/001-structured-spec-surface.md) | **a decomposed Unix** — isolated servers, capability-mediated, faults contained |
-| **3** | region-typed effects | [RFC-2](rfcs/002-verified-effect-rows.md) | the same, **multi-core** |
-| **4** | resource invariants | [RFC-3](rfcs/003-resource-invariants.md) | shared kernel structures under proven locks |
-| **5** | linear types | [RFC-4](rfcs/004-linear-types.md) | **dynamic processes and memory — Unix's core mechanisms verified** |
-| **6** | interference relations | [RFC-5](rfcs/005-interference-clauses.md) | the same, without serialising the hot paths |
-| **7** | protocol types | [RFC-6](rfcs/006-protocol-types.md) | server decomposition verified end to end |
+| **1** | structural predicates over recursive data | [the spec surface](rfcs/structured-spec-surface.md) | **a Unix, running unverified, inside a verified box** |
+| **2** | predicates over bounded collections | [the spec surface](rfcs/structured-spec-surface.md) | **a decomposed Unix** — isolated servers, capability-mediated, faults contained |
+| **3** | checked effect rows over shared state | [verified effect rows](rfcs/verified-effect-rows.md) | the same, **multi-core** |
+| **4** | invariant-guarded shared state | [shared-state invariants](rfcs/shared-state-invariants.md) | shared kernel structures under proven locks |
+| **5** | linear types | [resource types](rfcs/resource-types.md) | **dynamic processes and memory — Unix's core mechanisms verified** |
+| **6** | interference relations | [interference clauses](rfcs/interference-clauses.md) | the same, without serialising the hot paths |
+| **7** | protocol types | [protocol types](rfcs/protocol-types.md) | server decomposition verified end to end |
 
 Beyond those, three directions the mathematics points at that would make this a
 novel kernel rather than a proven instance of a familiar one:
@@ -61,7 +61,7 @@ Worth stating precisely, because it bounds the project.
 
 | | why it is outside | is it different mathematics? |
 |---|---|---|
-| crash consistency | needs a crash relation and a recovery obligation | **No.** Crash Hoare Logic (FSCQ, 2015) adds a third clause to the Hoare triple. It is a rung we have not scheduled, not a barrier — see [RFC-7](rfcs/007-crash-clause.md) |
+| crash consistency | needs a crash relation and a recovery obligation | **No.** Crash Hoare Logic (FSCQ, 2015) adds a third clause to the Hoare triple. It is a rung we have not scheduled, not a barrier — see [the crash clause](rfcs/crash-clause.md) |
 | POSIX semantics | thousands of behaviours, many historical accidents, no canonical formal spec | **No.** Ordinary safety properties. Outside for cost, not mathematics |
 | device drivers | needs a hardware model per device | Different, and expensive per driver. Capsules are the only route |
 | **liveness and fairness** | "something good eventually happens" | **Yes.** Safety properties are violated by a finite prefix; liveness only by infinite behaviour. Needs ranking functions, fairness assumptions and temporal logic rather than invariants |
