@@ -448,6 +448,60 @@ This is abstraction with an interface: consumers reason from the stated
 properties rather than the definition. It is how large proof developments stay
 tractable, and `ensures` already exists on `fn`.
 
+## Migration
+
+This document renames every clause in the language, so the break is total rather
+than partial and the size is worth stating rather than implying. Measured across
+the 69 `.th` files at the pin:
+
+| | sites | change |
+|---|---|---|
+| `ens` | 208 | → `ensures` |
+| `req` | 160 | → `requires` |
+| `fx` | 150 | → `!`, and **moves from last to first** |
+| `dec` | 31 | → `measures`, and moves to last |
+| `inv` | 18 | → `keeps` |
+| **total clause sites** | **567** | across 155 items |
+| `req true` | 108 | → `requires nothing` |
+| `ens true` | 2 | → `ensures nothing` |
+
+Every clause site in the corpus changes. That is a larger break than
+[verified effect rows](verified-effect-rows.md)'s, which touches 50 of 149 effect
+atoms — but it is a different *kind* of break, and the difference is what makes
+it affordable.
+
+**It is mechanical.** A rename plus a fixed reorder is a deterministic
+source-to-source rewrite. Nothing about it depends on what a program means, so a
+migration tool is a parser and a printer rather than an analysis, and it can be
+run once and checked by re-certifying the corpus. The effect-rows migration
+cannot be automated the same way, because deciding which region an `alloc`
+belongs to needs a human.
+
+**One part is not mechanical, and it is small.** `req true` → `requires nothing`
+is a change of meaning-preserving spelling, not of syntax. A naive rewriter emits
+`requires true`, which stays legal — `true` remains legal inside expressions and
+the sugar is clause-level only. So the tool produces working code, and adopting
+the sugar is an optional second pass over 110 sites rather than a correctness
+condition.
+
+**Certificates survive.** This is the part worth checking rather than assuming.
+The `.cert.json` oracle subset is `item` / `level` / `tautology` /
+`vacuous_precondition` / `effects` / `slag` — clause names appear nowhere in it,
+verified across the corpus. So renaming clauses invalidates no oracle, and the
+migration is source-only.
+
+The contrast is instructive and belongs with the other document rather than this
+one: `effects` **is** in the oracle subset, so the effect-row systematization
+does invalidate certificates. One of the 12 oracle items carrying an effects
+field is affected, because it carries `alloc`; the other 11 are `pure`.
+
+**Addresses need one edit each.** Every clause keyword is also a semantic-address
+segment, and `validate_segments` matches a fixed allowlist —
+`"dec" | "proof" | "ens" | "req" | "inv"`. Each renamed clause needs its segment
+renamed there, and each new one needs adding. That is the reason a clause keyword
+must be a single word, and it is a one-line change per clause rather than a
+design problem.
+
 ## The names, and why
 
 ### `resource` for linearity

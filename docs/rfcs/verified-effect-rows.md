@@ -137,6 +137,20 @@ declaration line per program covers all of them. Staging it as a warning first
 would be worse than useless, because the point of the change is that an
 undeclared name is an error.
 
+**Unlike a rename, this one cannot be automated.** Deciding which region an
+`alloc` belongs to is a judgement about what the program shares, not a
+transformation of its text. Contrast
+[the surface conventions](surface-conventions.md#migration), whose much larger
+break — all 567 clause sites — is a deterministic rewrite precisely because
+nothing about it depends on what the program means.
+
+**And unlike a rename, this one invalidates certificates.** `effects` is in the
+`.cert.json` oracle subset, alongside `item`, `level`, `tautology`,
+`vacuous_precondition` and `slag`, so changing an atom changes the oracle it is
+compared against. Of the 12 oracle items in the corpus carrying an effects field,
+one is affected — it carries `alloc` — and the other 11 are `pure`. Small, and it
+has to be part of the change rather than discovered by a red CI run.
+
 ## The second break: the kernel target refuses `write`
 
 `forge build --target kernel` refuses the central example of this RFC.
