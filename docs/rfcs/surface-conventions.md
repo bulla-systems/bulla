@@ -322,8 +322,8 @@ bakes in a topology assumption; `Channel<send T>` misreads as "a channel you sen
 
 ```thermite
 protocol PageRequest {
-  provider sends { status: u32, base: u64 },
   user     sends { op: u32, count: u64 },
+  provider sends { status: u32, base: u64 },
   end,
 }
 
