@@ -1,6 +1,20 @@
 # MWE: the privilege state machine
 
-The first buildable increment (T0). Requires no language work.
+> **Superseded 2026-08-04, kept as a record.** This document specified T0 as a
+> port of `kernel/src/context.rs`. That port is stopped. The upstream file is
+> being withdrawn, and its shape — records nested inside records — is what made
+> the attempt hit [G4](language-gaps.md#g4-struct-fields-of-user-declared-types)
+> and five further gaps.
+>
+> What survives: the five properties P1–P5 are still the right claims for an
+> execution-context subsystem, which [the architecture](architecture.md#4-applying-the-test)
+> keeps IN the verified core. What changes is that the types get designed for
+> Thermite rather than transcribed from Rust, per
+> [§5 of the architecture](architecture.md#5-the-data-model).
+>
+> The findings recorded below — the gap set, the corrected `enter` signature, and
+> the P3–P5 discovery — are why the architecture pass happened, so the document
+> stays.
 
 ## Why this one
 

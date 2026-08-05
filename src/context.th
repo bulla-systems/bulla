@@ -1,13 +1,17 @@
-// T0: the privilege state machine, ported from kernel/src/context.rs.
+// STOPPED PROBE, retained as evidence. Not a T0 implementation.
 //
-// Blocked on Thermite #122 (G4): every struct here has a field of user-declared
-// type, and such a struct does not certify. Written and checked anyway, so the
-// non-struct parts of the port are validated and any further gap surfaces while
-// #122 is outstanding. docs/language-gaps.md records what this run found.
+// This was a port of kernel/src/context.rs. The port is stopped: the upstream
+// file is being withdrawn, and its shape — records nested inside records — is a
+// consequence of being written for a language with a compositional type system.
+// docs/architecture.md §5 designs for Thermite instead.
 //
-// Thermite has no impl blocks, so the transitions are free functions taking the
-// context by value and returning the new one. There is no implication operator;
-// a conditional postcondition is `!a || b`.
+// It is kept because checking it is what found G6 through G12, and because it
+// certifies eight of thirteen items, including `create` at L3 — the only place
+// P3, P4 and P5 have been discharged. Deleting it would delete that evidence.
+//
+// Two forced divergences from the source are marked at their sites: the
+// CapabilityKind variants carry a Cap prefix (G8), and the generation guard is
+// restated as > MAX - 1 (G10).
 
 enum Privilege { Kernel, User }
 
