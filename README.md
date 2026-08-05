@@ -82,7 +82,9 @@ The path is (1) → (2). (3) is a direction rather than a destination.
 
 | | |
 |---|---|
+| [The ladder](docs/the-ladder.md) | the roadmap: each rung is a proof capability, and what kernel it buys |
 | [Architecture](docs/architecture.md) | where the verified core begins and ends, and why the line sits there |
+| [RFCs](docs/rfcs/) | the language proposals each rung needs |
 | [Products](docs/products.md) | the `separation` and `monolithic` profiles, and what decides whether the second is real |
 | [Assurance model](docs/assurance-model.md) | what a certificate claims, and the vocabulary for saying it |
 | [Roadmap](docs/roadmap.md) | T0–T4, with the blocker for each tier named |

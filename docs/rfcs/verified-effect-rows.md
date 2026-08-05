@@ -1,0 +1,223 @@
+# Verified effect rows
+
+**Rung 3.** Kind: extension to an existing mandatory clause.
+
+## The framing
+
+The proposal is not "add concurrency to Thermite". It is:
+
+> **Make effect rows verified rather than asserted.**
+
+Race-freedom falls out as a consequence, and with it multi-core.
+
+## The problem it starts from
+
+Today `write(db)` is an unchecked claim. Nothing declares `db`; nothing verifies
+the function touches only it. The effect row is documentation that happens to be
+syntax.
+
+Reproduced at the pin — a body that touches nothing, claiming two resources that
+are declared nowhere:
+
+```thermite
+fn f(n: u64) -> u64
+  req n < 10
+  ens result == n
+  fx  write(a_resource_that_does_not_exist), read(nor_this_one)
+{ n }
+```
+```
+item: f
+level: L3
+effects: [write(a_resource_that_does_not_exist), read(nor_this_one)]
+```
+
+Unchecked in both directions: an undeclared name passes, and a declared effect
+the body never performs passes. Effect-row names are not reserved words either
+(`lexer.rs`: "Effect-row names and slag field names are not reserved"), so there
+is no spelling that would fail.
+
+That is a weakness independent of concurrency. A function may quietly touch
+authority it never declared, and the row will not notice.
+
+## Proposal
+
+Declare shared state, so the row can be checked against it:
+
+```thermite
+shared scheduler: SchedState
+shared shootdown: Shoot
+shared clock:     TimeState
+```
+
+`shared` rather than `region`, per
+[the surface conventions](surface-conventions.md): "region" is effect-systems
+jargon that names the mechanism, and `shared` names the safety-relevant property.
+For a kernel this fits naturally, because shared state is static.
+
+Effect atoms keep their existing `verb(resource)` shape, generalised to a new
+resource kind:
+
+```thermite
+fn advance() -> u64
+  ! write(scheduler), read(clock)
+  requires  nothing
+  ensures   result < MAX_SLOTS
+```
+
+The checker now verifies the row is honest rather than trusting it.
+
+[The surface conventions](surface-conventions.md#the-effect-row-is-two-families-of-label)
+carry the rest of the row's structure — the two label families, the composition
+law each carries, and the rule that a `shared` thing is named in the row while a
+`resource` thing is not. This document is about making the state family
+checkable.
+
+## The concurrency consequence
+
+Given honest rows, concurrent composition gets a conflict rule:
+
+| | |
+|---|---|
+| `write(r)` ∥ `write(r)` | reject |
+| `write(r)` ∥ `read(r)` | reject |
+| `read(r)` ∥ `read(r)` | accept |
+
+That is ordinary reader-writer exclusion, and it is the condition for
+data-race-freedom. By the DRF-SC theorem (Adve & Hill, 1990), a data-race-free
+program cannot distinguish its execution from a sequentially consistent one.
+
+**So every sequential proof already written stays valid, unchanged, on multiple
+CPUs.** That is the whole return on this RFC.
+
+Exclusivity is a property of the *composition rule*, not of the atom.
+`write(log)` means the same thing it means today; the rule only fires where two
+functions are composed concurrently. Applied uniformly it also catches two
+threads writing one file, which is correct and currently unnoticed.
+
+## Where the check happens
+
+Concurrency in a kernel is not spawned dynamically — CPUs run handlers — so the
+composition site can be declarative:
+
+```thermite
+interleaves shootdown { ack, complete }
+```
+
+## Migration
+
+**Making the row checkable is a breaking change for every existing `.th` that
+names a resource, and there is currently nowhere to declare one.** That covers
+the whole corpus, so the size is worth measuring rather than asserting.
+
+Across the 67 `.th` files in the pinned tree, 149 effect atoms:
+
+| | count | what migration asks of it |
+|---|---|---|
+| `pure` | 93 | nothing |
+| `diverge` | 6 | nothing — a control effect, not state |
+| `alloc` | 22 | becomes `write(heap)` |
+| `time` | 4 | becomes `read(clock)` |
+| `term` | 3 | becomes a read/write on a terminal region |
+| named-resource atoms | 24 | the name must resolve to a declaration |
+
+The 24 named atoms carry 7 distinct names: `clock`, `db`, `input`, `log`,
+`memory`, `output`, `stdin`. Every one is undeclared today, because declaring one
+is what this RFC adds.
+
+**A standard prelude absorbs most of it.** The ambient names — `stdin`, `log`,
+`clock`, `heap`, `entropy`, a terminal — are the same in every program and can be
+declared once in a prelude the compiler injects. What remains for a program to
+declare is the names it invented: `db`, `input` and `output` in the corpus. The
+`platform(...)` domains are a separate namespace and should be settled alongside
+rather than folded in.
+
+So the break is wide and shallow: 50 of 149 atoms change, and a prelude plus one
+declaration line per program covers all of them. Staging it as a warning first
+would be worse than useless, because the point of the change is that an
+undeclared name is an error.
+
+## The second break: the kernel target refuses `write`
+
+`forge build --target kernel` refuses the central example of this RFC.
+Reproduced at the pin:
+
+```thermite
+fn tick(n: u64) -> u64
+  req n < 100
+  ens result == n + 1
+  fx  write(shootdown)
+{ n + 1 }
+```
+```
+forge: usage error: `forge build --target kernel` refuses `tick`: its transitive
+effect row carries the ambient-syscall effect `write(shootdown)` (a `write`
+userspace syscall), which kernel code has no ambient surface for. The admitted
+kernel effects are pure/alloc/panic/diverge
+```
+
+The same file with `alloc` in place of the write builds and reports `fx=[alloc]`.
+
+`KERNEL_REJECTED_FX` is `["read", "write", "net", "term", "time", "rand"]`,
+"matched by the leading verb of each `effects_of` token (`read(stdin)` → `read`)"
+(`forge/src/build.rs`). A kernel item may not carry a `write` at all, whatever it
+names. And under the row systematization, `alloc` becoming `write(heap)` would
+turn the one allocation effect the kernel target admits into a rejected one.
+
+Both facts have one cause, and it is the cause this RFC removes: **the row cannot
+distinguish a syscall-backed ambient effect from a state effect on declared
+state, so the profile has to reject by leading verb.** There is nothing else to
+reject by.
+
+Declared shared state gives the profile a better predicate. A kernel build should
+refuse effects on ambient, syscall-backed regions and admit effects on regions
+the kernel itself declares — rejecting by region kind rather than by verb. That
+is a sharper check than the current one, and it is a required companion change
+rather than a follow-up: without it, rung 3 produces kernels that cannot be
+built.
+
+## What this does not do
+
+**It does not prevent deadlock.** Deadlock is about lock *ordering*, not
+aliasing. Two functions each acquiring two regions in opposite orders both pass.
+That needs a region partial order, and it is a real gap in this proposal.
+
+**It does not help with lock-free sharing.** That is
+[interference clauses](interference-clauses.md).
+
+**Interrupts are concurrency too**, and this is the kernel-specific case with no
+userspace analogue. A handler preempts normal context on the *same* CPU, so
+`write(scheduler)` in a handler races `write(scheduler)` in normal context even
+single-threaded. The row needs to distinguish:
+
+```thermite
+fn timer_isr() -> ()
+  ! irq, write(scheduler)
+  requires  nothing
+  ensures   nothing
+```
+
+with `irq` functions conflicting with non-`irq` functions over the same region
+unless the latter masks interrupts — itself an effect, `masked`.
+
+## Open question to settle before implementation
+
+**Granularity.** One region per subsystem serialises things that need not be.
+Sub-regions (`shared scheduler.runqueue: ...`) would help, but the conflict rule
+then needs a containment order: `write(scheduler)` must conflict with
+`read(scheduler.runqueue)`.
+
+Tractable — it is a tree, and conflict is ancestry — but it is the difference
+between a weekend and a fortnight, and retrofitting it is worse than deciding it.
+
+The heap makes this concrete rather than theoretical. Once `alloc` is
+`write(heap)`, every allocating function conflicts with every other, so
+allocation serialises. That is correct for a single global allocator and it is
+currently invisible; the fix is per-CPU heaps as separate regions, which is the
+granularity question with a specific answer.
+
+## Metatheory
+
+None new. DRF-SC is from 1990. The conflict check is syntactic: no solver, no
+proof obligations. This is the only proposal in the set with that property, which
+is why it is the best value per unit of work.

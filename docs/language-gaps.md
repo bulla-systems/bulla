@@ -413,11 +413,118 @@ Every transition in a state machine returns `Result<Struct, Error>`. For those,
 equivalent mutants cannot be probed, so they are counted as survivors and the
 kill ratio is biased down: `resume` scores 9/18 against the §7 floor.
 
-This is a bias rather than a bar — `create` returns `Result<UserContext, _>` too
-and cleared the floor. But it means a non-scalar-returning transition needs a
-contract strong enough to overcome the counted survivors, and the failure it
-reports names the contract rather than the probe, which sends you looking in the
-wrong place.
+> **Corrected and isolated 2026-08-04.** This section previously said the effect
+> is "a bias rather than a bar", on the evidence that `create` returns
+> `Result<UserContext, _>` and cleared the floor. **It is a bar.** A matched pair
+> shows it flipping an honest contract from passing to falsely gated, with the
+> return type as the only difference.
+
+Both bodies below have **identical branches**, so every mutation of the `if`
+condition is observably equivalent to the real body and none of them is evidence
+of a weak contract:
+
+```thermite
+fn pick(x: u64) -> u64
+  req x < 10
+  ens result == x
+  fx pure
+{ if x < 5 { x } else { x } }
+```
+```
+mutants killed: 1/1        non-vacuous
+```
+
+```thermite
+struct Ctx { generation: u64 }
+
+fn pick(c: Ctx) -> Result<Ctx, u64>
+  req c.generation < 10
+  ens match result { Ok(n) => n.generation == c.generation, Err(e) => false }
+  fx pure
+{ if c.generation < 5 { Ok(Ctx { generation: c.generation }) }
+  else { Ok(Ctx { generation: c.generation }) } }
+```
+```
+mutation kill ratio 0/4 is below the floor
+VACUOUS — WeakContract
+```
+
+The denominators carry the finding. The same operators generate the same mutants
+for the same body shape; the scalar contract is scored against **1** and the
+struct contract against **4**. The three the scalar run does not count are the
+ones its equivalence probe proved equivalent and dropped. The struct run cannot
+run that probe, so it counts them, reaches 0/4, and reports the contract as weak.
+
+The message names the contract and tells you to strengthen the `ens`. There is
+nothing to strengthen: the mutants are equivalent, and no postcondition
+distinguishes bodies that cannot be distinguished.
+
+**It is not a semantics gap.** `equivalent-mutants.md` OQ-1 states the
+formulation already generalises — "the spec-fn pair returns the wrapper type and
+`ensures` its `==`" — and only the scalar arm is grounded. So this is an
+unimplemented arm with a written design, in the same class as
+[G4](#g4-struct-fields-of-user-declared-types).
+
+**What it blocks.** Not the design of anything in [docs/rfcs/](rfcs/) — it
+touches no surface and no proposal depends on it. It blocks the *evidence*: while
+it stands, no step-shaped subsystem can be shown meeting the §7 floor, because
+`step : State × Event → State × Action` returns a struct by construction
+([architecture §6](architecture.md#6-the-shape-of-a-verified-subsystem)). Every
+transition Bulla intends to write is in the affected class.
+
+The second half of the question is
+[unexamined upstream and answered here](rfcs/interference-clauses.md#how-these-clauses-are-scored):
+mutation scores a contract by mutating the *body*, and an `asks` clause is not a
+claim about the body at all.
+
+---
+
+## G14: a loop has no `diverge` exemption, so an infinite loop needs a false measure
+
+**Status upstream:** not filed. Found on 2026-08-04 by probe during the surface
+pass.
+
+A recursive `fn` may decline to prove termination by declaring the effect, and
+the checker says so itself:
+
+```
+recursive function `countdown` must have a decreases clause — a `fn` that calls
+itself MUST supply a `dec <measure>` so termination is proved (§4.1;
+`.design/basis/10-recursion-tuples.md` REQ-2), UNLESS it declares `fx diverge`
+```
+
+Taking that exemption costs assurance rather than being free: the same function
+certifies at **L1** with `fx diverge` where it would reach L3 with a measure.
+That is a good design — divergence is available, priced, and visible in the
+certificate.
+
+The exemption does not reach loops. A loop requires `dec` even when the enclosing
+function declares `fx diverge`:
+
+```thermite
+fn idle() -> u64
+  req true
+  ens result == 0
+  fx diverge
+{ let mut i: u64 = 0; while true inv i >= 0 { i = i + 1; } 0 }
+```
+```
+forge: parse failed (1 error(s)):
+  - function `loop` is missing the mandatory `dec` clause
+```
+
+Adding `dec 0` makes it certify at L1. So an intentionally infinite loop — a
+scheduler idle loop, an event loop, the most ordinary construct in a kernel — is
+only writable by supplying a measure that cannot strictly decrease, and the false
+measure then sits in the source where a later reader will believe it.
+
+Worth noting the asymmetry that is *not* a gap: `spec fn` requires a measure with
+no exemption, recursive or not. That is correct, because a spec function is used
+in logic and a non-total one would be unsound.
+
+**Scope:** small. Extend the `UNLESS it declares fx diverge` exemption from
+functions to the loops inside them, so an infinite loop is written by omitting
+the measure rather than by faking one.
 
 ---
 
