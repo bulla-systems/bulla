@@ -55,41 +55,58 @@ primitive keys. Three things need measuring against actual usage:
 3. **Non-primitive keys and values** — the conformance case is `u64 → u64`; the
    models key on newtypes and store structs.
 
-### The audit, run 2026-08-03
+### The audit, corrected 2026-08-03
 
-Every `BTreeMap` operation the models call, against the shipped
-`insert`/`get`/`contains_key`/`len` surface. 257 call sites: 150 covered, 107 not.
+> **The first run of this audit was wrong and its numbers were published
+> upstream.** It summed two overlapping regexes, so every `self.field.method()`
+> call counted twice: 257 sites reported against 130 actual, with every
+> per-operation figure exactly doubled. It also listed `len` as available in exec
+> position, which it is not. Corrected below against a receiver-typed,
+> position-deduplicated count, which agrees operation-for-operation with an
+> independent measurement from the Thermite side. The upstream issue carries the
+> correction.
 
-The raw 42% overstates it, because two of the uncovered operations are mutation
-idioms rather than capabilities. `get_mut` (48 sites) and `entry` (4) are
-read-modify-write on a `&mut` binding, which in a value-semantics language is
-`get` followed by `insert`. `is_empty` (2) is `len() == 0` and `clear` (2) is a
-fresh `Map::new()`. None of those need anything from the lowering.
+**The shipped exec surface is three operations.** From `emit_one_map_wrapper` in
+`thermite-lower/src/lower.rs`:
 
-What is left is two genuine capabilities:
+| | |
+|---|---|
+| executable | `insert`, `get`, `contains_key` |
+| spec-only | `len`, `spec_contains_key`, `spec_dom`, `well_formed` |
 
-| missing | sites | where |
+`len` is a `pub open spec fn`, so there is no executable size or emptiness test.
+`remove`, `iter`, `values` and `keys` appear nowhere in `thermite-syntax`,
+`thermite-lower` or `thermite-spec`.
+
+**The models call twelve distinct operations across 130 sites:**
+
+```
+insert 37 · get 27 · get_mut 24 · remove 12 · contains_key 11 · iter 9
+values 4 · entry 2 · clone 1 · clear 1 · is_empty 1 · take 1
+```
+
+Rewritable against the shipped surface: `get_mut` and `entry` become
+`get`/modify/`insert`, since `insert` overwrites; `clear` becomes a rebind;
+`clone` and `take` are local.
+
+Not rewritable:
+
+| missing | sites | files |
 |---|---|---|
-| `remove` | 24 | frame 12, dma 4, irq 2, memory 2, smp 2, services 2 |
-| iteration (`iter`, `values`) | 25 | frame 10, memory 5, scheduler 4, smp 2, sync 2, services 2 |
+| `remove` | 12 | dma, frame, irq, memory, services, smp |
+| iteration (`iter`, `values`) | 13 | frame, memory, scheduler, services, sync |
+| `is_empty` | 1 | memory — blocked too, because `len` is spec-only |
 
-Per tier, which is what decides the roadmap:
+Together they touch **8 of the 19 model files**.
 
-| tier | models | needs |
-|---|---|---|
-| T1 capability ledger | `capability` | nothing — its only uncovered op is `get_mut` |
-| T2 frame / memory | `frame`, `memory` | `remove` and iteration |
-| T3 irq / device / dma | `irq`, `dma`, `device` | `remove` |
-| T4 smp / sync / atomic | `smp`, `sync`, `atomic` | `remove` and iteration |
+**So G1 is surface coverage rather than existence.** `Map` lowers and works; it
+is missing two operations the kernel models need. Per tier: T1 needs neither and
+is clear, T3 needs `remove`, and T2 and T4 need both.
 
-**G1 is a real gap, and smaller than first described.** It is two operations, not
-a missing `Map`. T1 is not blocked by it at all, which the original framing had
-wrong in the other direction. Revocation needs `remove`; the schedulers and
-allocators need to traverse.
-
-Whether iteration is even expressible under the bounded Vec-of-pairs backing is
-the open design question — a `forall` over the domain may serve the contracts
-without an iteration primitive in exec position. That is upstream's call.
+Whether iteration needs an exec-position primitive is the open design question.
+Every use in the models is a fold or a search whose contract is a `forall` over
+the domain, and `spec_dom` already exists, so the contracts may be writable
+without an iterator.
 
 ---
 
@@ -160,6 +177,20 @@ struct Frame { regs: Regs, generation: u64 }
 error[E0425]: cannot find type `Regs` in this scope
   |     pub regs: Regs,
 ```
+
+**Scope corrected 2026-08-04: this covers enums too.** The upstream report
+described a struct-field problem. Measured against enum variants, both payload
+forms fail identically:
+
+```thermite
+enum Ev  { Header { r: Regs }, Done }    // error[E0425]
+enum Ev2 { Header(Regs), Done }          // error[E0425]
+```
+
+So the accurate statement is that **the type graph must be one level deep**: no
+declared type may appear inside any other declared type, in any position. An enum
+variant carrying only primitives certifies at L3, which is what makes a
+transition-system style workable at all today.
 
 The per-struct check harness emits the field declaration without weaving in the
 declaration it references. A struct whose fields are all primitives certifies at
@@ -232,6 +263,270 @@ describing a contract in prose, which is how it got into an earlier draft of
 
 **Scope:** small, and a candidate for an upstream RFC: surface sugar desugaring
 to `!a || b`, with no change to the proof obligations.
+
+---
+
+## G13: no linear types, so a grant can be dropped
+
+**Status upstream:** not a defect. Thermite never claimed linear types; this is a
+requirement [the architecture](architecture.md#3-making-invariants-local-ownership-as-the-lever)
+places on the language, recorded rather than filed.
+
+Declared types are affine: they move rather than copy, and reuse is rejected.
+
+```thermite
+struct Tok { v: u64 }
+fn take(t: Tok) -> u64 req true ens result == t.v fx pure { t.v }
+fn twice(t: Tok) -> u64 ... { let a: u64 = take(t); let b: u64 = take(t); a + b }
+```
+```
+error[E0382]: use of moved value: `t`
+```
+
+That is what makes an ownership grant unforgeable, and it is the mechanism the
+meso position depends on. What is missing is the other half: nothing requires a
+grant to be *returned*. Affine types permit dropping; linear types would not.
+
+The consequence is a clean split in what the architecture can claim. Duplication
+is a safety property and is enforced. Leaking is a liveness property and is not,
+so resource exhaustion sits outside the model and the assurance claim says so.
+
+**Scope:** large, and a language-design question rather than a bug. Worth raising
+only once there is a verified subsystem whose grants it would apply to.
+
+---
+
+## Found by attempting the port
+
+`src/context.th` is a real 200-line port of `kernel/src/context.rs`, written and
+checked against Thermite at the pin on 2026-08-03 while
+[#122](https://github.com/dollspace-gay/Thermite/issues/122) is outstanding. It
+does not certify, which was expected. Six further gaps surfaced on the way, none
+of which reading the language reference would have found.
+
+Where it got to:
+
+```
+L3   Privilege · CapabilityKind · TrapOrigin · ContextError   (enums)
+L3   Registers                                                (primitive-only struct)
+L3   canonical · holds_rights                                 (spec fns)
+L3   create                                                   ← P3, P4, P5 discharged
+L0   Capability · UserContext · TrapFrame                      G4
+L0   enter · resume                                            G12
+```
+
+`create` certifying is the substantive result: no kernel address, canonical
+addresses, and 16-byte stack alignment are proven for all inputs, against a
+contract whose mutants die.
+
+### G6: an integer literal in `dec` has no inferable type
+
+```thermite
+spec fn canonical(address: u64) -> bool
+  dec 0
+```
+```
+error[E0283]: type annotations needed
+   | decreases 0
+   | cannot infer type of the type parameter ... on `spec_literal_integer`
+```
+
+Every `spec fn` in the conformance corpus uses a parameter as its measure
+(`dec l`, `dec r`, `dec xs.len()`), so a constant measure is unreached. Naming a
+parameter works and is the workaround.
+
+### G7: `==` on a user enum works in spec position and fails in exec position
+
+```thermite
+fn f(k: K) -> bool ... { if k == K::A { .. } }   // error[E0369]
+fn f(k: K) -> K ... ens result == K::A { K::A }  // L3
+```
+
+The lowering does not put `PartialEq` on user enums in exec code. `is Variant`
+works in exec position and is the workaround.
+
+Read together with [G4b](#g4b-inv-does-not-bind-the-receiver-for-is) this is a
+neat complementary pair: an `inv` clause takes `==` and not `is`, and an exec
+body takes `is` and not `==`.
+
+### G8: referencing an enum variant shadows a same-named struct
+
+```thermite
+enum Kind { Thing, Other }
+struct Thing { id: u32 }
+// in one fn: discriminate on Kind::Thing, then construct Thing { id }
+error[E0559]: variant `Kind::Thing` has no field named `id`
+```
+
+Construction resolves to the variant. Neither qualifying (`k is Kind::Thing`)
+nor using `match` avoids it; only renaming does. Constructing the struct in a
+function that never mentions the variant is fine.
+
+This is not hypothetical for a port: `CapabilityKind::UserContext` and
+`struct UserContext` are both names `kernel/src/context.rs` uses, and the two
+meet in every transition. `src/context.th` prefixes the variants to get past it,
+which is a divergence from the source it is supposed to mirror.
+
+### G9: `spec fn` is not callable from exec position
+
+```
+error: cannot call function `holds_rights` with mode spec
+```
+
+The language reference describes spec functions as "total, terminating,
+executable", and the lowering emits Verus `spec fn`, which is ghost-only. A
+predicate needed in both a contract and a body has to be written twice: once as
+a `spec fn` and once inline.
+
+### G10: the `u64::MAX` literal lowers to `u64::MAX + 1`
+
+```thermite
+x == 18446744073709551615     // written
+if ctx.generation == 18446744073709551616 {   // emitted
+error: integer literal out of range U(64)
+```
+
+`18446744073709551614` lowers correctly, as do small literals, so this is an
+off-by-one at the boundary rather than general literal breakage. It bites any
+saturation or overflow guard, which is where `u64::MAX` naturally appears —
+`context.rs` guards its generation counter with `checked_add`. Restating the
+guard as `> MAX - 1` is the workaround.
+
+### G11: user structs have no `Copy`, so a field cannot be read twice
+
+```
+error[E0382]: use of moved value: `ctx.registers`
+```
+
+`enter` reads `ctx.registers` into both the updated context and the trap frame,
+which the source does freely because `Registers` derives `Clone, Copy`.
+Rebuilding the literal field by field is the workaround, and it scales badly:
+five fields here, and the reason `enter` is longer in `.th` than in Rust.
+
+### G12: the mutation-equivalence probe supports only scalar returns
+
+```
+equivalence obligation supports only scalar (u32/u64/usize/bool) returns;
+`resume` returns a non-scalar type (equivalent-mutants.md OQ-1)
+survivor COUNTED, not excluded
+```
+
+Every transition in a state machine returns `Result<Struct, Error>`. For those,
+equivalent mutants cannot be probed, so they are counted as survivors and the
+kill ratio is biased down: `resume` scores 9/18 against the §7 floor.
+
+> **Corrected and isolated 2026-08-04.** This section previously said the effect
+> is "a bias rather than a bar", on the evidence that `create` returns
+> `Result<UserContext, _>` and cleared the floor. **It is a bar.** A matched pair
+> shows it flipping an honest contract from passing to falsely gated, with the
+> return type as the only difference.
+
+Both bodies below have **identical branches**, so every mutation of the `if`
+condition is observably equivalent to the real body and none of them is evidence
+of a weak contract:
+
+```thermite
+fn pick(x: u64) -> u64
+  req x < 10
+  ens result == x
+  fx pure
+{ if x < 5 { x } else { x } }
+```
+```
+mutants killed: 1/1        non-vacuous
+```
+
+```thermite
+struct Ctx { generation: u64 }
+
+fn pick(c: Ctx) -> Result<Ctx, u64>
+  req c.generation < 10
+  ens match result { Ok(n) => n.generation == c.generation, Err(e) => false }
+  fx pure
+{ if c.generation < 5 { Ok(Ctx { generation: c.generation }) }
+  else { Ok(Ctx { generation: c.generation }) } }
+```
+```
+mutation kill ratio 0/4 is below the floor
+VACUOUS — WeakContract
+```
+
+The denominators carry the finding. The same operators generate the same mutants
+for the same body shape; the scalar contract is scored against **1** and the
+struct contract against **4**. The three the scalar run does not count are the
+ones its equivalence probe proved equivalent and dropped. The struct run cannot
+run that probe, so it counts them, reaches 0/4, and reports the contract as weak.
+
+The message names the contract and tells you to strengthen the `ens`. There is
+nothing to strengthen: the mutants are equivalent, and no postcondition
+distinguishes bodies that cannot be distinguished.
+
+**It is not a semantics gap.** `equivalent-mutants.md` OQ-1 states the
+formulation already generalises — "the spec-fn pair returns the wrapper type and
+`ensures` its `==`" — and only the scalar arm is grounded. So this is an
+unimplemented arm with a written design, in the same class as
+[G4](#g4-struct-fields-of-user-declared-types).
+
+**What it blocks.** Not the design of anything in [docs/rfcs/](rfcs/) — it
+touches no surface and no proposal depends on it. It blocks the *evidence*: while
+it stands, no step-shaped subsystem can be shown meeting the §7 floor, because
+`step : State × Event → State × Action` returns a struct by construction
+([architecture §6](architecture.md#6-the-shape-of-a-verified-subsystem)). Every
+transition Bulla intends to write is in the affected class.
+
+The second half of the question is
+[unexamined upstream and answered here](rfcs/interference-clauses.md#how-these-clauses-are-scored):
+mutation scores a contract by mutating the *body*, and an `asks` clause is not a
+claim about the body at all.
+
+---
+
+## G14: a loop has no `diverge` exemption, so an infinite loop needs a false measure
+
+**Status upstream:** not filed. Found on 2026-08-04 by probe during the surface
+pass.
+
+A recursive `fn` may decline to prove termination by declaring the effect, and
+the checker says so itself:
+
+```
+recursive function `countdown` must have a decreases clause — a `fn` that calls
+itself MUST supply a `dec <measure>` so termination is proved (§4.1;
+`.design/basis/10-recursion-tuples.md` REQ-2), UNLESS it declares `fx diverge`
+```
+
+Taking that exemption costs assurance rather than being free: the same function
+certifies at **L1** with `fx diverge` where it would reach L3 with a measure.
+That is a good design — divergence is available, priced, and visible in the
+certificate.
+
+The exemption does not reach loops. A loop requires `dec` even when the enclosing
+function declares `fx diverge`:
+
+```thermite
+fn idle() -> u64
+  req true
+  ens result == 0
+  fx diverge
+{ let mut i: u64 = 0; while true inv i >= 0 { i = i + 1; } 0 }
+```
+```
+forge: parse failed (1 error(s)):
+  - function `loop` is missing the mandatory `dec` clause
+```
+
+Adding `dec 0` makes it certify at L1. So an intentionally infinite loop — a
+scheduler idle loop, an event loop, the most ordinary construct in a kernel — is
+only writable by supplying a measure that cannot strictly decrease, and the false
+measure then sits in the source where a later reader will believe it.
+
+Worth noting the asymmetry that is *not* a gap: `spec fn` requires a measure with
+no exemption, recursive or not. That is correct, because a spec function is used
+in logic and a non-total one would be unsound.
+
+**Scope:** small. Extend the `UNLESS it declares fx diverge` exemption from
+functions to the loops inside them, so an infinite loop is written by omitting
+the measure rather than by faking one.
 
 ---
 

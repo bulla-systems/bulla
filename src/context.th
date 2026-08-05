@@ -1,0 +1,230 @@
+// STOPPED PROBE, retained as evidence. Not a T0 implementation.
+//
+// This was a port of kernel/src/context.rs. The port is stopped: the upstream
+// file is being withdrawn, and its shape — records nested inside records — is a
+// consequence of being written for a language with a compositional type system.
+// docs/architecture.md §5 designs for Thermite instead.
+//
+// It is kept because checking it is what found G6 through G12, and because it
+// certifies eight of thirteen items, including `create` at L3 — the only place
+// P3, P4 and P5 have been discharged. Deleting it would delete that evidence.
+//
+// Two forced divergences from the source are marked at their sites: the
+// CapabilityKind variants carry a Cap prefix (G8), and the generation guard is
+// restated as > MAX - 1 (G10).
+
+enum Privilege { Kernel, User }
+
+// Variants carry a `Cap` prefix only to dodge the name collision described in
+// G8: `CapabilityKind::UserContext` and `struct UserContext` are both names the
+// source uses, and referencing the variant shadows the struct for construction.
+// The source spells these without a prefix.
+enum CapabilityKind {
+  CapBootInfo, CapCpu, CapCpuSet, CapCpuLocal, CapPhysRegion, CapFrame,
+  CapVirtRegion, CapAddressSpace, CapMmio, CapIoPort, CapIrq, CapIrqState,
+  CapTrapFrame, CapUserContext, CapDma, CapIommuDomain, CapClock, CapEntropy,
+  CapPower,
+}
+
+enum TrapOrigin {
+  Interrupt(u8),
+  Exception(u8),
+  Syscall(u64),
+}
+
+enum ContextError {
+  WrongCapability, MissingRights, NonCanonical, MisalignedStack,
+  KernelAddress, NotRunnable, WrongContext, WrongGeneration,
+  WrongPrivilege, GenerationOverflow,
+}
+
+// capability.rs models Rights as a hand-rolled newtype over u32 with const bit
+// constants; the bit layout is carried here directly. CONTROL is 1 << 5.
+struct Capability {
+  kind: CapabilityKind,
+  rights: u32,
+  generation: u64,
+}
+
+struct Registers {
+  instruction_pointer: u64,
+  stack_pointer: u64,
+  flags: u64,
+  argument0: u64,
+  result: u64,
+}
+
+struct UserContext {
+  id: u32,
+  address_space: u32,
+  registers: Registers,
+  generation: u64,
+  runnable: bool,
+}
+
+// P1 structurally: both constructors write the literal, so a Kernel-privileged
+// frame cannot be built and no transition can produce one.
+struct TrapFrame {
+  context: u32,
+  origin: TrapOrigin,
+  registers: Registers,
+  privilege: Privilege,
+  generation: u64,
+} inv privilege == Privilege::User
+
+// memory.rs:419. Two shifts and a comparison.
+spec fn canonical(address: u64) -> bool
+  dec address
+{
+  ((address >> 47) & 1 == 0 && address >> 48 == 0)
+    || ((address >> 47) & 1 == 1 && address >> 48 == 65535)
+}
+
+spec fn holds_rights(held: u32, required: u32) -> bool
+  dec held
+{
+  held & required == required
+}
+
+// P3, P4, P5. The source checks canonical form, then the kernel-address bound,
+// then alignment, and that order fixes which error a doubly-bad input reports.
+fn create(cap: Capability, id: u32, space: u32, ip: u64, sp: u64)
+    -> Result<UserContext, ContextError>
+  req true
+  ens match result {
+        Ok(c)  => c.registers.instruction_pointer < 140737488355328
+                  && c.registers.stack_pointer < 140737488355328
+                  && canonical(c.registers.instruction_pointer)
+                  && canonical(c.registers.stack_pointer)
+                  && c.registers.stack_pointer % 16 == 0
+                  && c.generation == 0
+                  && c.runnable,
+        Err(e) => true,
+      }
+  fx  pure
+{
+  if !(cap.kind is CapUserContext) {
+    return Err(ContextError::WrongCapability);
+  }
+  if cap.rights & 32 != 32 {
+    return Err(ContextError::MissingRights);
+  }
+  if !(((ip >> 47) & 1 == 0 && ip >> 48 == 0) || ((ip >> 47) & 1 == 1 && ip >> 48 == 65535))
+     || !(((sp >> 47) & 1 == 0 && sp >> 48 == 0) || ((sp >> 47) & 1 == 1 && sp >> 48 == 65535)) {
+    return Err(ContextError::NonCanonical);
+  }
+  if ip >= 140737488355328 || sp >= 140737488355328 {
+    return Err(ContextError::KernelAddress);
+  }
+  if sp % 16 != 0 {
+    return Err(ContextError::MisalignedStack);
+  }
+  Ok(UserContext {
+    id: id,
+    address_space: space,
+    registers: Registers {
+      instruction_pointer: ip,
+      stack_pointer: sp,
+      flags: 514,
+      argument0: 0,
+      result: 0,
+    },
+    generation: 0,
+    runnable: true,
+  })
+}
+
+// Returns both halves: entering consumes runnability, which the earlier sketch
+// dropped. Without it the NotRunnable guard can never fire on a second call.
+fn enter(ctx: UserContext, cap: Capability)
+    -> Result<(UserContext, TrapFrame), ContextError>
+  req true
+  ens match result {
+        Ok(pair) => !pair.0.runnable
+                    && pair.0.generation == ctx.generation
+                    && pair.1.privilege == Privilege::User
+                    && pair.1.generation == ctx.generation
+                    && pair.1.context == ctx.id,
+        Err(e)   => !(e == ContextError::NotRunnable) || !ctx.runnable,
+      }
+  fx  pure
+{
+  if !(cap.kind is CapUserContext) {
+    return Err(ContextError::WrongCapability);
+  }
+  if cap.rights & 32 != 32 {
+    return Err(ContextError::MissingRights);
+  }
+  if !ctx.runnable {
+    return Err(ContextError::NotRunnable);
+  }
+  Ok((
+    UserContext {
+      id: ctx.id,
+      address_space: ctx.address_space,
+      registers: Registers {
+        instruction_pointer: ctx.registers.instruction_pointer,
+        stack_pointer: ctx.registers.stack_pointer,
+        flags: ctx.registers.flags,
+        argument0: ctx.registers.argument0,
+        result: ctx.registers.result,
+      },
+      generation: ctx.generation,
+      runnable: false,
+    },
+    TrapFrame {
+      context: ctx.id,
+      origin: TrapOrigin::Syscall(0),
+      registers: ctx.registers,
+      privilege: Privilege::User,
+      generation: ctx.generation,
+    },
+  ))
+}
+
+// P2: the only path to Ok runs through a generation equal to the context's, and
+// success advances the epoch by one. GenerationOverflow is a real branch.
+fn resume(ctx: UserContext, cap: Capability, frame: TrapFrame, value: u64)
+    -> Result<UserContext, ContextError>
+  req true
+  ens match result {
+        Ok(c)  => frame.generation == ctx.generation
+                  && frame.context == ctx.id
+                  && c.generation == ctx.generation + 1
+                  && c.runnable,
+        Err(e) => true,
+      }
+  fx  pure
+{
+  if !(cap.kind is CapUserContext) {
+    return Err(ContextError::WrongCapability);
+  }
+  if cap.rights & 32 != 32 {
+    return Err(ContextError::MissingRights);
+  }
+  if frame.context != ctx.id {
+    return Err(ContextError::WrongContext);
+  }
+  if frame.generation != ctx.generation {
+    return Err(ContextError::WrongGeneration);
+  }
+  if !(frame.privilege is User) {
+    return Err(ContextError::WrongPrivilege);
+  }
+  if ctx.generation > 18446744073709551614 {
+    return Err(ContextError::GenerationOverflow);
+  }
+  Ok(UserContext {
+    id: ctx.id,
+    address_space: ctx.address_space,
+    registers: Registers {
+      instruction_pointer: frame.registers.instruction_pointer,
+      stack_pointer: frame.registers.stack_pointer,
+      flags: frame.registers.flags,
+      argument0: frame.registers.argument0,
+      result: value,
+    },
+    generation: ctx.generation + 1,
+    runnable: true,
+  })
+}
