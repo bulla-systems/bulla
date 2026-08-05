@@ -155,8 +155,12 @@ Two families, each with a fixed shape:
 
 | family | shape | examples | composition |
 |---|---|---|---|
-| state | names a region | `read(r)`, `write(r)` | union |
+| state | names a region | `read(r)`, `write(r)`, `forgets(r)` | union |
 | control | describes the arrow | `panic`, `blocks`, `diverge`, `cost(E)` | or; sum for `cost` |
+
+`forgets(r)` is [resource types](resource-types.md)'s abandonment operation, and
+it is a state effect for the ordinary reason: it names the region the abandoned
+resource came from, and a caller inherits it.
 
 A state effect always names its region, and a control effect never does, so the
 shape is the discriminator and no reader has to be told which family a label

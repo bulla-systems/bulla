@@ -109,6 +109,40 @@ writing now for the reason the architecture gives for designing the composed
 model anyway: a rule derived before the constraint lifts is a rule; a rule
 discovered after is a migration.
 
+## Abandoning one is an operation, not a hole
+
+Type-level linearity is inflexible by construction: a `Grant` must be consumed
+even on a path where abandoning it is the correct thing to do. Teardown,
+shutdown and abort all want that, and a discipline with no answer for them gets
+worked around rather than followed.
+
+The answer is to make abandonment explicit and visible in the row:
+
+```thermite
+fn shutdown(g: Grant) -> ()
+  ! forgets(heap)
+  requires  nothing
+  ensures   nothing
+{ forget(g) }
+```
+
+`forget(g)` discharges the obligation without consuming the resource, and
+`forgets(r)` records it as a state effect on the region the resource came from.
+So the escape exists, it is counted, it appears in every transitive caller's row
+by the composition law, and a release rule can refuse it the way TMK's refuses
+`#[boundary]`.
+
+**This is also the answer to the `panic` question**, which is otherwise a hole in
+the whole rung. An abort drops every live binding, including resources, so the
+guarantee is *exactly once unless the program dies*. With an explicit
+abandonment operation, that stops being an unstated caveat and becomes a claim
+about a specific effect: a function carrying `panic` and holding a resource is
+performing an implicit `forget`, and the row should say so rather than the
+guarantee quietly weakening. Whether `panic` therefore implies `forgets(r)` for
+every live resource, or whether the two are simply incompatible in a release
+build, is the remaining choice — but it is now a choice between two stateable
+rules rather than an omission.
+
 ## Metatheory
 
 Linear logic (Girard, 1987); linear and non-linear types coexisting in one
@@ -129,14 +163,16 @@ From `vstd/tokens.rs` itself:
 A release rule blocking axioms and `assume` needs a position on that trusted
 core.
 
-## Open questions
+## Settled here, recorded as choices
 
-- **Interaction with `panic`.** An abort drops every live binding, including
-  resources. So the guarantee is *exactly once, unless the program dies*, and the
-  honest options are to state it that way or to bar `panic` from the row of any
-  function holding a resource. The second is checkable and the first is cheaper;
-  contagion makes the choice matter more, because the set of functions holding a
-  resource is larger than it first looks.
-- **Whether linearity belongs on the type or the binding.** The type is simpler
-  and is what contagion above assumes; the binding is more flexible. Settled
-  here in favour of the type, and recorded as a choice rather than an omission.
+**Linearity is on the type, not the binding.** The binding is more flexible and
+is closer to the substrate — Verus's `tracked` is a mode on a binding, not a
+property of a type — so the lowering will insert `tracked` at each use. The type
+wins anyway, because contagion is not optional and only types can state it: a
+field is not a binding, so "a struct with a resource field is a resource" has
+nothing to attach to under the binding reading. The flexibility that argument
+gives up is returned by `forget` above.
+
+**What remains open** is the narrower half of the `panic` question: whether
+`panic` implies `forgets(r)` for every live resource, or whether a release build
+simply refuses the combination.
