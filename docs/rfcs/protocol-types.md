@@ -56,6 +56,55 @@ protocol Request {
 }
 ```
 
+## What a hand-encoded session already gives
+
+Before proposing syntax, the encoding was probed, because a session is a state
+machine and state machines verify today. The Provider's view of
+`User { op, count } → Provider { status, base } → end`:
+
+```thermite
+enum Message { Request { op: u32, count: u64 }, Reply { status: u32, base: u64 } }
+enum Turn    { Awaiting { step: u32 }, Done { status: u32 } }
+
+struct Session { step: u32 } inv step <= 2
+
+fn advance(s: Session, m: Message) -> Turn
+  req (s.step == 0 && m is Message::Request) || (s.step == 1 && m is Message::Reply)
+  ens match result {
+        Turn::Awaiting { step } => step == s.step + 1,
+        Turn::Done { status }   => s.step == 1,
+      }
+  fx  pure
+```
+
+Every item certifies at **L3**, the contract is **non-vacuous** and kills 5 of 6
+mutants, and a caller that replies at step 0 is rejected:
+
+```
+[FAIL] precondition not satisfied @ misuse_check.rs:48:5
+```
+
+**So protocol fidelity is enforceable today, with no new syntax.** The headline
+claim below — a party that sends when it should receive fails to typecheck — is
+already reachable as a precondition naming the legal message per step. That
+changes what this RFC is: it proposes *sugar over something provable*, not a new
+obligation, which is a much smaller thing to ask for and a much easier thing to
+evaluate.
+
+Two things the encoding does not give, and both are the reasons the sugar earns
+its place.
+
+**It does not compose.** The precondition is written by hand per protocol, and
+nothing checks that the two parties' hand-written state machines are duals. A
+declared protocol projects both sides from one source, which is where the safety
+actually comes from.
+
+**It does not force completion.** `abandon(s: Session) -> u64` — taking a session
+at step 0 and simply dropping it — verifies. Affine types permit the drop, and no
+contract can say "you must call `advance` again", because that is liveness. This
+is the concrete evidence for the endpoint-is-a-resource requirement below: the
+safety half is reachable today and the completion half is not.
+
 ## What it buys
 
 - **Protocol conformance.** A party that sends when it should receive fails to

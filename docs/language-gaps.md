@@ -420,6 +420,21 @@ kill ratio is biased down: `resume` scores 9/18 against the §7 floor.
 > `Result<UserContext, _>` and cleared the floor. **It is a bar.** A matched pair
 > shows it flipping an honest contract from passing to falsely gated, with the
 > return type as the only difference.
+>
+> **Scope widened 2026-08-05: parameters too, and the heading understates it.**
+> The restriction is on non-scalar *params* as well as non-scalar returns:
+>
+> ```
+> equivalence probe Unsupported — survivor COUNTED, not excluded: unsupported
+> construct for L3 lowering: equivalence obligation supports only scalar params;
+> `abandon`'s param `s` is non-scalar (equivalent-mutants.md OQ-1)
+> ```
+>
+> `abandon(s: Session) -> u64` returns a **scalar** and is still rejected
+> `WeakContract` at 1/2, because it takes a user-declared struct. So the affected
+> class is not "functions returning a struct" but "functions that mention a
+> declared type in their signature at all" — which is every transition, every
+> constructor, and every accessor in a state-machine subsystem.
 
 Both bodies below have **identical branches**, so every mutation of the `if`
 condition is observably equivalent to the real body and none of them is evidence

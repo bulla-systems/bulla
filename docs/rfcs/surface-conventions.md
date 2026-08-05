@@ -431,6 +431,26 @@ The genuinely dangerous case keeps no sugar. An unsatisfiable precondition makes
 every obligation vacuously true, and it is written `requires false` with the
 literal, which looks unusual.
 
+**One asymmetry is not ours, and it changes what `ensures nothing` can mean.**
+Probed at the pin: `req true` certifies at **L3**, and `ens true` is rejected
+outright —
+
+```
+level: L0
+reject: EnsIsTrivial — §7.1 (a): ens#0 is syntactically `true` (literal or identity)
+```
+
+So a trivial postcondition is not merely alarming, it fails the assurance gate.
+`ensures nothing` therefore cannot be a spelling a program uses and keeps; it is
+a spelling the checker refuses. That is arguably the right outcome — the sugar
+parses, says plainly what it means, and is then rejected by §7.1 with a reason —
+but the previous draft described it as looking alarming, which implied it was
+legal. It is not, and the two corpus uses of `ens true` are `map_kv.th` and
+`review/vacuous.th`, the latter being a deliberate vacuity test case.
+
+`requires nothing` is unaffected and remains ordinary, which is the same
+direction the verb already pointed.
+
 ### `spec fn` gains `ensures`
 
 Without it an opaque predicate is useless — callers could conclude nothing from
