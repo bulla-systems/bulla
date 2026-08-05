@@ -1,6 +1,6 @@
-# The crash clause
+# The `survives` clause
 
-**Unscheduled.** Kind: one new clause, shaped like `ens`.
+**Unscheduled.** Kind: one new clause, shaped like `ensures`.
 
 ## Why it is here
 
@@ -20,24 +20,33 @@ crash:   I(s) ∧ crash(s, d) ∧ recover(d) = s′ ⟹ I(s′)
 ```
 
 Structurally that is *a relation you do not control interfering with your step* —
-the same shape as [interference clauses](interference-clauses.md)'s `<~`, with the
+the same shape as [interference clauses](interference-clauses.md)'s `asks`, with the
 environment being physics rather than another CPU.
 
 ## Proposal
 
 ```thermite
 fn commit(j: &mut Journal, b: Block) -> ()
-  req    j.open && b.len <= MAX_BLOCK
-  ens    final(j).committed == j.committed + 1
-  crash  final(j).recoverable
-         && (final(j).committed == j.committed
-             || final(j).committed == j.committed + 1)
-  fx     write(disk)
+  ! write(disk)
+  requires {
+    j.open;
+    b.len <= MAX_BLOCK;
+  }
+  ensures   final(j).committed == j.committed + 1
+  survives {
+    final(j).recoverable;
+    final(j).committed == j.committed
+      || final(j).committed == j.committed + 1;
+  }
 ```
 
-`crash` states what holds if execution stops at *any* point inside the function.
-The classic journalling obligation — the commit either happened or did not, never
-half — is exactly that disjunction.
+`survives` states what holds if execution stops at *any* point inside the
+function. The classic journalling obligation — the commit either happened or did
+not, never half — is that disjunction.
+
+It is the crash-time analogue of `ensures`, which is why it conjugates the same
+way and sits beside it: `ensures` is the postcondition of a completed execution,
+`survives` the postcondition of an interrupted one.
 
 ## Metatheory
 

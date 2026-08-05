@@ -109,5 +109,7 @@ is a third-person-singular verb whose subject is the item. Symbols are kept only
 where the symbol *is* the concept — `->`, `=>`, `|x|`, `!` for the effect row,
 and the operators.
 
-Every document except the surface conventions predates that pass and still shows
-the older surface in places; the surface conventions govern where they disagree.
+The extension documents have been brought onto that surface. Where a document
+quotes the language as it is today — the reproductions in the spec-surface and
+effect-rows documents — it keeps the current spelling, because showing the
+language as it actually is is the point of a reproduction.
