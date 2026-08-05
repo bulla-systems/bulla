@@ -12,10 +12,9 @@ unusually good fit, because the protocol is known at build time.
 ## Proposal
 
 ```thermite
-protocol PageRequest {
-  user     sends { op: u32, count: u64 },
-  provider sends { status: u32, base: u64 },
-  end,
+protocol PageRequest repeats {
+  user     { op: u32, count: u64 },
+  provider { status: u32, base: u64 },
 }
 
 fn pager(c: provides PageRequest) -> ()
@@ -29,22 +28,31 @@ fn app(c: uses PageRequest) -> ()
   ensures   nothing
 ```
 
-Each step names the party that sends, so direction needs no glyph. `provides` and
-`uses` name what an endpoint offers rather than its position in a topology, and
-the endpoint type stands alone — no `Channel<>` wrapper, because the endpoint
-*is* the type. `dual` was rejected as a mathematician's word for the mirror of a
-thing, and `client`/`server` bakes in an assumption about who connects to whom.
+Each step is labelled with whose turn it is, so direction needs no glyph. The
+body names **roles** and a signature conjugates the role into what the parameter
+does — nouns where there is no single subject, verbs where the function is the
+subject, which is the rule that governs clauses applied where it applies.
+
+`provides` and `uses` name what an endpoint offers rather than its position in a
+topology, and the endpoint type stands alone — no `Channel<>` wrapper, because
+the endpoint *is* the type. `dual` was rejected as a mathematician's word for the
+mirror of a thing, and `client`/`server` bakes in an assumption about who
+connects to whom.
+
+Closing the braces ends the session. `repeats` in the header says it loops, which
+is the common case for a long-lived server and the reason an `end` marker is not
+needed in the body — a floating terminator among the turns reads as one more
+turn, and the fact belongs where a reader meets it first.
 
 Branching, which real protocols need:
 
 ```thermite
 protocol Request {
-  user sends { op: u32 },
+  user { op: u32 },
   picks {
-    ok:  provider sends { value: u64 },
-    err: provider sends { code: u32 },
+    ok:  provider { value: u64 },
+    err: provider { code: u32 },
   },
-  end,
 }
 ```
 

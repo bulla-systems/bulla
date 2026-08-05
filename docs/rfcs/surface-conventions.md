@@ -321,10 +321,9 @@ bakes in a topology assumption; `Channel<send T>` misreads as "a channel you sen
 `T`s on" — a message type rather than a role.
 
 ```thermite
-protocol PageRequest {
-  user     sends { op: u32, count: u64 },
-  provider sends { status: u32, base: u64 },
-  end,
+protocol PageRequest repeats {
+  user     { op: u32, count: u64 },
+  provider { status: u32, base: u64 },
 }
 
 fn pager(c: provides PageRequest) -> () ! blocks

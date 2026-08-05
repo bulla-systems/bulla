@@ -24,6 +24,7 @@ fn bump(c: &mut Counter) -> ()
   ! owns(counters)
   requires  c.n < MAX
   ensures   final(c).n == c.n + 1
+{ holding counters { c.n = c.n + 1; } }
 ```
 
 `lock NAME guards TYPE;` is a new item form. It keeps the locking concern out of
@@ -52,56 +53,62 @@ fn bump(c: &mut Counter) -> ()
 }
 ```
 
-`owns(r)` in the row is what a caller sees and what the conflict rule composes,
-so it is required whenever the lock is taken at all. `holding r { … }` narrows
-the extent inside a body and is optional.
+`owns(r)` in the row is what a caller sees and what the conflict rule composes.
+`holding r { … }` is where the lock is actually held. Neither is optional, and
+neither is inferred from the other.
 
-### The four rules
+### The three rules
 
-1. **`owns(r)` with no block** means the body is the section. The function-scoped
-   case is the sugar, exactly as a bare `requires P` is sugar for
-   `requires { P; }`.
+1. **`owns(r)` requires a `holding r` block**, always. There is no whole-body
+   default. Scoping the whole body is written `holding r { … }` around it.
 2. **A `holding r` block requires `owns(r)` in the row.** Otherwise it is a parse
    error, by the same mechanism that puts `asks` inside `interleaves`: the row
    must be honest, and a caller cannot see a body.
 3. **The row is an upper bound.** A `holding` block under an `if` is fine — the
    row says the lock may be taken, not that it is.
-4. **Two or more `owns` atoms require blocks.** With one lock the order is
-   trivial. With two, a bare row leaves the acquisition order unstated, so it
-   cannot be cleared for deadlock:
+
+Rules 1 and 2 are one rule in two directions: the row and the body must agree
+about every lock.
+
+**Why no default.** An implicit whole-body scope makes an over-declared lock
+invisible — `owns(r)` with no block is indistinguishable from "I meant the whole
+body", so a lock that is declared and never taken reads as correct. That is a
+declared-but-not-performed effect, which is what
+[verified effect rows](verified-effect-rows.md) exists to stop, appearing one
+level down:
 
 ```
-error: `transfer` takes `owns(src), owns(dst)` with no `holding` blocks —
-       the acquisition order is unstated and cannot be checked for ordering
+error: `bump` declares `owns(sched_lock)` and no `holding` block takes it
+```
+
+It also makes acquisition order always available. Two locks in one function
+produce two nested blocks, so the order is structural rather than unstated:
+
+```thermite
+holding src {
+  holding dst { … }        // src before dst
+}
 ```
 
 ### The obligation
 
 For a `lock r guards T`, the guarded type's invariant is **assumed on entry to a
-section and must be proved on exit**, and is not assumed between. That is the
-standard concurrent-separation-logic reading: you need to break the invariant to
-do the update.
+`holding r` block and must be proved on exit**, and is not assumed between. That
+is the standard concurrent-separation-logic reading: you need to break the
+invariant to do the update.
 
-In case 1 the section is the whole body, so the obligation reduces to two clauses
-that already exist —
+It needs no new clause syntax. The obligation derives from the
+`lock … guards …` declaration rather than from anything written at the block, and
+loops already show the language annotating a block, so this is not a new
+syntactic category either. Thermite has no `assert` and no proof blocks
+(verified: zero occurrences), and this needs neither.
 
-```
-an implicit  requires  keeps(T)     at entry
-an implicit  ensures   keeps(T)     at exit
-```
+### Why a block rather than a function
 
-— with no new construct at all. In the block case it is one derived obligation at
-the block's edges, deriving from the `lock … guards …` declaration rather than
-from anything written at the block, so no new clause syntax is needed either.
-Loops already show the language annotating a block, so this is not a new
-syntactic category. Thermite has no `assert` and no proof blocks (verified: zero
-occurrences), and neither form needs one.
+An earlier draft made the function body the critical section, on the grounds that
+it reduces to clauses that already exist. Three things are wrong with that.
 
-### Why both, rather than the function alone
-
-An earlier draft proposed function scope only, on the grounds that it needs no
-new machinery and keeps every critical section visible in a signature. Two things
-are wrong with that.
+**It hides an over-declared lock.** Covered above, and it is the decisive one.
 
 **Factoring is expensive here.** Narrowing a section by extracting a function
 costs a full contract — `requires`, `ensures` and the row are all mandatory — so
@@ -110,20 +117,13 @@ cheap in Thermite.
 
 **Function scope cannot express the ordering this document's own open question
 asks for.** `! owns(a), owns(b)` does not say which is taken first, so a deadlock
-check has nothing to work with. Nested blocks state it structurally:
+check has nothing to work with. Nested blocks state it structurally.
 
-```thermite
-holding a {
-  holding b { … }        // a before b
-}
-```
-
-So blocks are what make a region partial order checkable, rather than a
-convenience that complicates it. And because a block is lexical, the extent stays
-a syntactic property: reentrancy is containment — no call lexically inside a
-`holding r` block may reach a function whose row carries `owns(r)` — rather than
-a dataflow question. That would only become flow-sensitive with separate
-acquire and release statements, which this does not propose.
+Because a block is lexical, the extent stays a syntactic property: reentrancy is
+containment — no call lexically inside a `holding r` block may reach a function
+whose row carries `owns(r)` — rather than a dataflow question. That would only
+become flow-sensitive with separate acquire and release statements, which this
+does not propose.
 
 ## The conflict rule gains three rows
 
@@ -155,11 +155,13 @@ substrate is present.
 ## Open questions
 
 - **Reentrancy.** Does holding `owns(r)` permit calling something that also wants
-  `owns(r)`? The answer is no, and rule 2 above makes it checkable by
-  containment rather than by dataflow.
+  `owns(r)`? The answer is no, and because a `holding` block is lexical this is
+  checkable by containment rather than by dataflow: no call inside a `holding r`
+  block may reach a function whose row carries `owns(r)`.
 - **Ordering.** `owns(a), owns(b)` in one function and `owns(b), owns(a)` in
-  another deadlocks, and today both typecheck. Rule 4 makes the order *stated*;
-  it does not yet make it *checked*. Checking it needs a region partial order,
+  another deadlocks, and today both typecheck. Requiring blocks makes the order
+  *stated*; it does not yet make it *checked*. Checking it needs a region partial
+  order,
   which the effect-rows RFC also wants, and one order would close both at once.
   What this document contributes is that the order is now written down somewhere
   a checker could read.
