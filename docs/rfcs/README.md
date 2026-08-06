@@ -1,6 +1,7 @@
 # Provisional RFCs for Thermite
 
 Language proposals, each matched to a rung of [the ladder](../the-ladder.md).
+[Thermite 3](thermite-3.md) sequences them and is the one to read first.
 
 **Status of every document here: provisional, and ours.** None has been proposed
 upstream. Thermite is not our project, seven issues are open and unanswered, and
@@ -13,6 +14,7 @@ currently in that state.
 
 | document | rung | proposes | kind |
 |---|---|---|---|
+| [Thermite 3](thermite-3.md) | — | the sequencing: what lands in what order, and the syntax-only anchor | **meta** |
 | [surface conventions](surface-conventions.md) | all | the clause grammar and surface every other document assumes | **cross-cutting** |
 | [the effect algebra](effect-algebra.md) | all | what an effect *is*: a theory, a basis, and the criterion for admitting one | **cross-cutting** |
 | [structured spec surface](structured-spec-surface.md) | 1, 2 | complete the spec surface of structured data | **defect report** — four items, all reproduced |
