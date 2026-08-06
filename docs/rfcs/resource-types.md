@@ -16,9 +16,10 @@ fn twice(t: Tok) -> u64 ... { let a: u64 = take(t); let b: u64 = take(t); a + b 
 error[E0382]: use of moved value: `t`
 ```
 
-Affine gives *at most once*: you may drop. **Linear** gives *exactly once*: you
-may not. The gap between them is the gap between a safety property and a liveness
-one.
+Affine gives *at most once*: you may drop. **Linear** gives *exactly once on
+every path that returns*: you may not. The gap between them is the gap between a
+safety property and a liveness one, and the returning-path qualifier is the same
+one `ensures` already carries.
 
 ## Why the kernel needs it
 
@@ -132,16 +133,43 @@ So the escape exists, it is counted, it appears in every transitive caller's row
 by the composition law, and a release rule can refuse it the way TMK's refuses
 `#[boundary]`.
 
-**This is also the answer to the `panic` question**, which is otherwise a hole in
-the whole rung. An abort drops every live binding, including resources, so the
-guarantee is *exactly once unless the program dies*. With an explicit
-abandonment operation, that stops being an unstated caveat and becomes a claim
-about a specific effect: a function carrying `panic` and holding a resource is
-performing an implicit `forget`, and the row should say so rather than the
-guarantee quietly weakening. Whether `panic` therefore implies `forgets(r)` for
-every live resource, or whether the two are simply incompatible in a release
-build, is the remaining choice — but it is now a choice between two stateable
-rules rather than an omission.
+## `panic` needs nothing, and the reason is not special pleading
+
+An abort drops every live binding, including resources, and an earlier draft
+treated that as a hole to be filled — either by inferring `forgets(r)` for every
+live resource on a panicking path, or by refusing the combination in a release
+build. Neither is needed.
+
+**The obligation is scoped exactly as `ensures` is, for exactly the same reason.**
+A function that aborts does not establish its postcondition; nobody thinks that
+is a hole in `ensures`. The resource obligation is postcondition-shaped, so it
+inherits the same scoping:
+
+> A `resource` binding is consumed on every path **that returns**.
+
+A panicking path does not return, so there is nothing to consume and nothing to
+infer. The static check gets this right without being told, because an aborting
+call diverges and the code after it is unreachable — which is the same reason
+Rust's move checker does not demand consumption after `panic!()`.
+
+The language already prices non-returning paths, too. `diverge` drops an item
+from L3 to L1, from total to partial correctness, precisely because postconditions
+are claims about returning executions. A resource obligation weakened on a
+non-returning path is that same weakening, already recorded in the certificate.
+
+What this costs is one word of precision in the guarantee, and it belongs in the
+summary rather than in a footnote: linearity gives **exactly once on every path
+that returns**, not exactly once unconditionally.
+
+The two cases stay properly distinct, which is what makes this hold up:
+
+| | |
+|---|---|
+| **abort** | fatal, no subsequent state, nothing observes the abandonment — needs no operation |
+| **teardown** | deliberate, on a returning path, and the resource genuinely must be released without being consumed — that is `forget(g)`, counted in the row and refusable by a release rule |
+
+Tearing down a faulted partition is the second case, not the first, and it was
+the case that motivated `forget` to begin with.
 
 ## Metatheory
 
@@ -173,6 +201,7 @@ field is not a binding, so "a struct with a resource field is a resource" has
 nothing to attach to under the binding reading. The flexibility that argument
 gives up is returned by `forget` above.
 
-**What remains open** is the narrower half of the `panic` question: whether
-`panic` implies `forgets(r)` for every live resource, or whether a release build
-simply refuses the combination.
+**`panic` needs no rule**, settled above: the obligation is scoped to returning
+paths exactly as `ensures` is, so an aborting path has nothing to consume.
+Deliberate abandonment on a returning path is `forget`, which is a different
+case.
