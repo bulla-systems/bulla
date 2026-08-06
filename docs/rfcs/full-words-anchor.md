@@ -21,7 +21,8 @@ proposed here.
 Plus three things that follow from those:
 
 **Clause order becomes** the effect row, then the bare clauses, then `measures`
-last. Today it is `req` ×1, `ens` ×1+, `fx` ×1 last.
+last. Today it is `req` ×1, `ens` ×1+, `fx` ×1, then an optional `dec` — the row
+is not last, and a recursive function carries its measure after it.
 
 **A clause body may be a block of conjuncts**, with the bare single-expression
 form as sugar:
@@ -129,10 +130,32 @@ at `84d276e7`:
 
 Three things make that affordable.
 
-**It is mechanical.** A rename plus a fixed reorder is a deterministic
-source-to-source rewrite. Nothing about it depends on what a program means, so
-the migration tool is a parser and a printer rather than an analysis, and it can
-be run once and checked by re-certifying the corpus.
+**It is mechanical, and the tool exists.** `thermite-migrate.py` is a
+source-to-source rewrite rather than a parse-and-print, so comments, blank lines
+and expression text survive untouched — a formatter would produce a diff nobody
+can review, and this change does not need one. A clause runs from its keyword
+until its expression closes, tracked by delimiter balance, so a clause whose
+expression wraps across lines moves as one unit.
+
+**And it is proved information-preserving rather than argued to be.** The tool
+rewrites in both directions, so the claim is checkable before any parser accepts
+the new surface:
+
+```
+$ thermite-migrate.py --check conformance examples
+round-trip: 67/67 files restore byte for byte
+```
+
+`to_v2(to_v3(x)) == x` for every file in the corpus, including the 24 clauses
+whose expressions wrap. That is a stronger check than re-certifying, which cannot
+be run at all until the front end changes.
+
+Two facts the round-trip forced into the open, both of which a diff-by-eye would
+have missed. The gap between a keyword and its expression is preserved verbatim
+rather than re-aligned, because column-preserving arithmetic is not invertible
+once it clamps — alignment is a formatter's job. And `fx` is **not last** in the
+current grammar: a recursive function's `dec` follows it, so the row must be
+restored before the measure rather than at the end.
 
 **The one non-mechanical part is optional.** A naive rewriter emits
 `requires true` rather than `requires nothing`. That stays legal — `true` remains
