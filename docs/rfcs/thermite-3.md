@@ -38,6 +38,9 @@ Three rules follow, and between them they decided every name in the set:
 
 ## The anchor: a syntax-only change
 
+Written out as its own proposal in [full words](full-words-anchor.md), which is
+the document to hand someone. This section is the summary.
+
 The first proposal changes **no expressive power whatsoever**. Every existing
 program keeps its meaning, and every one of them changes.
 
@@ -96,7 +99,7 @@ answers.
 ```
 1. defects                    issues, with reproductions — earns the standing
 2. the RFC process            creates the vehicle; without it there is nowhere to file
-3. the anchor                 syntax only, no new power
+3. the anchor                 syntax only, no new power — full-words-anchor.md
 4. the effect algebra         what a row is; underpins 5
 5. verified effect rows       rung 3, the multiplier
 6. shared-state invariants    rung 4
