@@ -3,10 +3,15 @@
 Language proposals, each matched to a rung of [the ladder](../the-ladder.md).
 [Thermite 3](thermite-3.md) sequences them and is the one to read first.
 
-**Status of every document here: provisional, and ours.** None has been proposed
-upstream. Thermite is not our project, seven issues are open and unanswered, and
-its author is refactoring. These exist so that when a proposal is worth making it
-is already worked out, and so the reasoning survives if it never is.
+**Status of every document here: provisional.** None has been proposed upstream
+yet. They are worked out here first so that a proposal arrives finished rather
+than as a sketch, and so the reasoning survives if one is never made.
+
+Bulla is Thermite's demanding consumer rather than an outside petitioner — the
+gaps in this directory were found by trying to build a kernel against the pin,
+and this repository shares a maintainer with Thermite. What that buys is not
+deference; it is that a proposal here can be evaluated on the design rather than
+on who is asking.
 
 What we do file upstream is **defects with reproductions**, which is a
 contribution rather than a request. The spec-surface document is the only one
@@ -41,8 +46,8 @@ directory held a different one under the same name.
 
 Renumbering into the same sequence moves the collision rather than removing it,
 because two authorities allocating from one counter is what produced it. A number
-in that namespace is an upstream allocation, and by the paragraph above none of
-these has been proposed, so claiming one is claiming what nobody granted.
+in that namespace is allocated upstream when a document is filed, and none of
+these has been. Taking one early would mean two counters again.
 
 So identity here is a **slug**. A document filed upstream gains its number there,
 recorded in the document, while its local identity stays the name.

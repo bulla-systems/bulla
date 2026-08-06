@@ -368,9 +368,9 @@ would rename. The anchor leaves them, because
 9. protocol types             rung 7
 ```
 
-Defects go first because they are a contribution rather than a request, and
-because a project with no verified subsystem proposing a wholesale surface change
-to someone else's language should arrive having already been useful.
+Defects go first because they are the dependency, not the diplomacy: #124 is
+rung 1, and no structural predicate over an ADT works until it is fixed. Filed
+2026-08-05.
 
 The RFC process goes second because Thermite's only RFC namespace is its issue
 tracker, which models reports and cannot version a proposal.
@@ -415,19 +415,21 @@ is four defects with reproductions rather than a proposal.
 | [protocol types](protocol-types.md) | ready as a document; depends on resource types landing |
 | [the crash clause](crash-clause.md) | **ready** — the crash model is named as the gate, with a first model stated |
 
-## What this asks of a maintainer
+## The cost of each step
 
-Read in order, the ask is small and gets larger:
+Read in order, the work is small and gets larger:
 
-1. Four defect reports with reproductions. Costs a triage.
-2. A process proposal that migrates their three existing RFCs and adds a
-   front-matter field feeding the REQ registry they already built. Costs a
-   review.
-3. A rename with a migration tool and a corpus that still certifies. Costs a
-   review and a CI run.
+1. Three defect reports with reproductions and located fixes. **Filed** —
+   [#124](https://github.com/dollspace-gay/Thermite/issues/124),
+   [#125](https://github.com/dollspace-gay/Thermite/issues/125),
+   [#126](https://github.com/dollspace-gay/Thermite/issues/126).
+2. A process proposal that migrates the three existing RFCs out of issues and
+   adds a front-matter field feeding the REQ registry. Arrives with its template,
+   its gate script, and the migration done.
+3. A rename with a migration tool and a corpus that still certifies.
 
-Nothing after that is proposed until those three land, because a surface nobody
-adopted is not a foundation to build six proposals on.
+Nothing after that is proposed until those land, because a surface nobody adopted
+is not a foundation for six proposals.
 
 ## The whole surface in one file
 
