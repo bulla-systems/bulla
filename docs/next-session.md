@@ -11,7 +11,7 @@ a document. Do a real context dive first.
 1. `docs/rfcs/thermite-3.md` — the surface in full, each construct marked by when
    it lands. This is the specification and the roadmap in one document.
 2. `docs/rfcs/full-words-anchor.md` — the syntax-only change that anchors
-   everything, and the next thing to propose.
+   everything. Filed as Thermite PR #128; this is the document under review.
 3. `docs/rfcs/anchor-implementation.md` — the measured work plan, the spike
    result, and what is still undone.
 4. `docs/rfcs/effect-algebra.md` — what an effect *is*: theories, the
@@ -24,7 +24,7 @@ a document. Do a real context dive first.
 
 **Then read the process log.** `day hook session-start` injects the teloi,
 tensions and practice claims. Beyond that, the reasoning behind every decision
-below is in kan — 123 claims across `atom/language-probe`, `atom/rfc-draft`,
+below is in kan — 139 claims across `atom/language-probe`, `atom/rfc-draft`,
 `atom/gap-report` and `practice`, all published to `.claims/`. Read the ones for
 whatever you are about to touch; they carry the *why*, which the documents often
 compress.
@@ -43,29 +43,50 @@ compress.
 9. protocol types              rung 7
 ```
 
-### What is proved about the anchor
+### What is proved about the anchor, and it is filed
 
 - **The front-end change is 63 insertions / 62 deletions across 5 files** in
   `thermite-syntax`. Saved as `tooling/migrate/anchor-front-end.patch`, applies
-  at `84d276e`.
-- **The migrated corpus certifies identically** — 18 items across 6 files, same
-  L3 counts as baseline. That is the check the round-trip cannot make.
-- **The migration tool round-trips 382/382 files byte for byte**
-  (`tooling/migrate/thermite-migrate.py --check --rust .`).
+  clean at `84d276e`.
+- **The migrated corpus certifies identically** — 18 items at L3 across 6 files,
+  same levels and the same exit status as baseline, against Verus
+  `0.2026.05.24.ecee80a`. Re-run this session with the AST rewriter rather than
+  inherited from the spike. `map_kv.th` exits 1 in *both* directions, for an
+  `ens true` that §7.1(a) rejects; reproducing that matters as much as the passes.
+- **The migration reaches the whole corpus.** 66 of 67 `.th` files migrate with
+  no clause keyword surviving, plus 450 embedded fragments carrying 1,527 clause
+  sites across 111 Rust files.
 
 ### What is undone, and it is specific
 
-- **Inline contracts** — `fn id(x: u32) -> u32 req true ens result == x fx pure { x }`,
-  373 sites across 83 files. Attempted twice, backed out twice. The decisive
-  reason: the last clause's text runs to end of line and therefore contains the
-  function body, so moving the row drags `{ x }` with it. **The route is two
-  passes** — reformat inline contracts onto separate lines first, then the
-  existing line-start migration handles them unaltered. Read the comment block in
-  the tool before starting; it lists all four traps.
 - **Three new productions** in the anchor and not in the spike: conjunct blocks
-  (`requires { a; b; }`), `requires nothing`, and one-or-more `requires`.
-- **516 clause-bearing literals** the tool declines to touch, reported for human
-  review. Mostly expected Verus output and prose.
+  (`requires { a; b; }`), `requires nothing`, and one-or-more `requires`. These
+  are the only genuinely new part; everything else is a rename or a move.
+- **43 clause-bearing literals** the rewriter declines, now enumerated by
+  `tooling/migrate/coverage.py` rather than counted. `format!` templates,
+  assertion prose, and fixtures invalid on purpose. The RFC owes this list to the
+  implementation PR.
+- **A file with any parse error is declined whole.** `parse` recovers per item,
+  so migrating the items that parsed would shrink the 43. The obvious refinement.
+- **The Rust-literal write path is measured, not built.** `unescape.py` carries
+  the offset map it needs.
+
+### The inline-contract route changed, so do not follow the old one
+
+The recorded plan was two passes: reflow each contract onto its own lines, then
+run the line-start migration. Probing it showed the reflow still has to locate
+the contract/body boundary, so it moves the problem rather than avoiding it.
+
+**The route is the front end.** `tooling/migrate/thmig` links `thermite-syntax`:
+`parse` gives item boundaries and decides whether text is Thermite at all,
+`tokenize` gives every offset, and the rewrite splices at spans. A clause keyword
+is a reserved token, and `parse_effect_row` is a closed grammar with no brace in
+it, so the boundary is the parser's answer rather than a heuristic. It lives on
+the local branch **`anchor/migrate-ast`**, unpushed, and needs `.build/thermite`
+at the pin plus the non-default `bv` cargo feature.
+
+`tooling/migrate/thermite-migrate.py` is the superseded text tool. It stays for
+its round-trip, with its two measured gaps recorded in place.
 
 ## The settled surface, so you do not re-derive it
 
@@ -89,8 +110,11 @@ subject is the item. It decided the names; do not treat it as decoration.
 
 ## Open, and yours to decide
 
-- **Whether to propose the anchor now or after the inline work.** It cannot land
-  without inline handling, because the test suite will not pass.
+- **Steps 4 through 9 are blocked by our own rule**, not by anyone else:
+  `thermite-3.md` says nothing after the anchor is proposed until it lands,
+  because a surface nobody adopted is not a foundation for six proposals. Six
+  upstream items are open with no maintainer response. Filing a seventh is the
+  wrong move; deciding to change the rule is a decision worth making explicitly.
 - **Conjunct-block semantics** — desugaring to repeated clauses is assumed and
   unspecified.
 - The **stability conjunct** in interference (`final(s).epoch == s.epoch`) does
@@ -99,11 +123,16 @@ subject is the item. It decided the names; do not treat it as decoration.
 
 ## Blocked, not forgotten
 
-T0 waits on Thermite#122. `src/context.th` is retained as a probe certifying 8/13
-items including `create` at L3 — **do not restart the port**; the
-execution-context subsystem gets designed fresh. Physical hardware boot is parked
-with its scoping in `docs/roadmap.md`. G4 blocks resource contagion from being
-enforceable.
+**G4 (#122) and G12 are being fixed upstream by Maxine directly, as of
+2026-08-06. Do not start on either.** Together they are the whole critical path
+for Bulla having any verified evidence: G4 means the kernel cannot be modelled,
+G12 means a correct model still cannot be shown to meet the §7 floor, so fixing
+one without the other buys nothing demonstrable.
+
+T0 waits on #122. `src/context.th` is retained as a probe certifying 8/13 items
+including `create` at L3 — **do not restart the port**; the execution-context
+subsystem gets designed fresh. Physical hardware boot is parked with its scoping
+in `docs/roadmap.md`. G4 blocks resource contagion from being enforceable.
 
 Gaps G6–G11, G13 and G14 are recorded and unfiled, per the sequencing note.
 
@@ -115,10 +144,17 @@ verified end to end.
 
 ## Environment, and it will bite
 
-- **`verus` is not on PATH.** It is required for every `forge check`. Last session
-  fetched `0.2026.05.24.ecee80a` (arm64-macos) into the scratchpad, which is
-  session-specific and now gone. Re-fetch it before probing, and run
-  `macos_allow_gatekeeper.sh`.
+- **`verus` is not on PATH**, and the scratchpad is session-specific, so re-fetch
+  it every time. This URL works and takes about a minute:
+
+  ```
+  curl -sL -o verus.zip https://github.com/verus-lang/verus/releases/download/\
+  release%2F0.2026.05.24.ecee80a/verus-0.2026.05.24.ecee80a-arm64-macos.zip
+  ```
+
+  `macos_allow_gatekeeper.sh` **exits 1 when there is no quarantine attribute**,
+  which is the normal case for a `curl`ed archive. That is benign: check
+  `verus --version` exits 0 rather than trusting the script's status.
 - **`cadical` is absent**, so `EprSolverUnavailable` verdicts are a missing binary
   rather than a language failure.
 - **Python here is 3.9**, so `tomllib` is unavailable and three upstream gates
@@ -137,9 +173,23 @@ repeatedly, and it caught four wrong claims in our own most careful document.
 That error reached a PR description last session and needed a public correction.
 
 **Build the cheap reversible check first.** It turns wrong work into a revert
-instead of a defect. And know its limits: a round-trip is silent about what a tool
-*fails* to touch, and preserving information is not the same as preserving meaning
-to the prover.
+instead of a defect. And know its limits, which cost real work this session: a
+round-trip scores what a tool *did* and never what it *skipped*. It reported
+382/382 restoring byte for byte while failing to touch every one-line contract
+and 17 `@bv`-tagged clauses. Pair reversibility with a completeness check — here,
+one line asserting no v2 clause token survives migration.
+
+**Measure a pinned upstream on a `git archive` export of the pin.** Counting
+through `.build/thermite`, a clone this repository writes into, put two of Bulla's
+own probe files into every published corpus figure: 69 files where there are 67,
+567 clause sites where there are 547, 384/384 where it is 382/382. Count clause
+sites with the lexer, not a regex, so a word in a comment cannot be a keyword.
+
+**When a gate goes red, establish whose fault it is before fixing it.**
+`doc-drift` failed on the RFC branch and looked pre-existing; running it on a
+worktree at the branch point showed it exits 0 there, so the drift was ours.
+Editing `registry.toml` drifts the design doc that governs it, and the fix is a
+manual re-pin rather than a workaround.
 
 **SHIPPED with cited evidence, or NOT STARTED with a named blocker.** Prose
 follows `docs/tone-and-voice.md`.
