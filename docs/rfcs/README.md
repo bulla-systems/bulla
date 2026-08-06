@@ -14,6 +14,7 @@ currently in that state.
 | document | rung | proposes | kind |
 |---|---|---|---|
 | [surface conventions](surface-conventions.md) | all | the clause grammar and surface every other document assumes | **cross-cutting** |
+| [the effect algebra](effect-algebra.md) | all | what an effect *is*: a theory, a basis, and the criterion for admitting one | **cross-cutting** |
 | [structured spec surface](structured-spec-surface.md) | 1, 2 | complete the spec surface of structured data | **defect report** — four items, all reproduced |
 | [verified effect rows](verified-effect-rows.md) | 3 | make effect rows verified rather than asserted | extension |
 | [shared-state invariants](shared-state-invariants.md) | 4 | invariant-guarded shared state | extension |
@@ -67,6 +68,8 @@ subsystem bolted on.
 
 - The spec-surface document fixes emitters for collections and recursive data
   that already lower.
+- The effect algebra says what a row is, so the conflict rule is derived rather
+  than stipulated.
 - Verified effect rows makes `fx` checkable, which it currently is not, and gets
   race-freedom as a consequence.
 - Shared-state invariants reuses `inv`.

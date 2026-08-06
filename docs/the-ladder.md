@@ -32,6 +32,7 @@ novel kernel rather than a proven instance of a familiar one:
 | **8** | noninterference | a hyperproperty — about *sets* of executions, not one. seL4 proved it for static configurations; dynamic authority is open |
 | **9** | cost as an effect | proven worst-case execution time rather than measured. Addresses the weakest link in real-time certification |
 | **10** | an algebra for composing certificates | [already identified as open in-repo](assurance-model.md#aggregation-is-unspecified). Needs no language change at all |
+| **11** | distributional effects | stipulate a distribution on a source input, certify the output's. The surface is reachable now — [`random` is designed to accept a parameter later](rfcs/effect-algebra.md#what-the-criterion-kept-differently-random), so `random(D)` is not a breaking change — and the discharge needs the convex algebra and enough measure theory to push distributions through a solver that has none. It is what a cryptographic argument requires |
 
 ## Why the order is what it is
 

@@ -87,6 +87,14 @@ That is ordinary reader-writer exclusion, and it is the condition for
 data-race-freedom. By the DRF-SC theorem (Adve & Hill, 1990), a data-race-free
 program cannot distinguish its execution from a sequentially consistent one.
 
+The table is **derived rather than stipulated**. Each row is the commutation
+condition of the state theory over a region — `get` commutes with `get`, `put`
+with neither — so the rule is a theorem about the tensor of independent region
+theories. [The effect algebra](effect-algebra.md#a-row-entry-is-a-theory-instance-plus-the-operations-used)
+carries the derivation, including the case it predicts that this document would
+not have guessed: `random` ∥ `random` accepts, because independent samples
+commute.
+
 **So every sequential proof already written stays valid, unchanged, on multiple
 CPUs.** That is the whole return on this RFC.
 
