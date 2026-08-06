@@ -50,8 +50,9 @@ fn release(a: Allocator, g: Grant) -> Allocator
   ensures   result.free_count == a.free_count + 1
 ```
 
-Rule: a binding of a `resource` type must be consumed on **every** path. That is
-the move analysis Rust already performs, minus permission to drop.
+Rule: a binding of a `resource` type must be consumed on **every path that
+returns**. That is the move analysis Rust already performs, minus permission to
+drop, and the returning-path qualifier is the one `ensures` already carries.
 
 `resource` rather than `linear` or `once`, per
 [the surface conventions](surface-conventions.md): the keyword names what the
@@ -113,9 +114,10 @@ discovered after is a migration.
 ## Abandoning one is an operation, not a hole
 
 Type-level linearity is inflexible by construction: a `Grant` must be consumed
-even on a path where abandoning it is the correct thing to do. Teardown,
-shutdown and abort all want that, and a discipline with no answer for them gets
-worked around rather than followed.
+even on a returning path where abandoning it is the correct thing to do. Teardown
+and shutdown both want that, and a discipline with no answer for them gets worked
+around rather than followed. (Abort is a different case and needs nothing — see
+below.)
 
 The answer is to make abandonment explicit and visible in the row:
 
