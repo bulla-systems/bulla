@@ -34,8 +34,8 @@ compress.
 ```
 1. defects            FILED    Thermite #124, #125, #126
 2. the RFC process    FILED    Thermite PR #127 — open, CI green
-3. the anchor         SPIKED   proved, not landable yet  ← you are here
-4. the effect algebra ready
+3. the anchor         FILED    Thermite PR #128 — open, stacked on #127
+4. the effect algebra ready  ← you are here
 5. verified effect rows        rung 3, the multiplier
 6. shared-state invariants     rung 4
 7. resource types              rung 5, the honest goal

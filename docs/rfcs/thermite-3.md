@@ -380,7 +380,7 @@ would rename. The anchor leaves them, because
 ```
 1. defects                    FILED — #124, #125, #126
 2. the RFC process            FILED — Thermite PR #127
-3. the anchor                 syntax only — full-words-anchor.md
+3. the anchor                 FILED — Thermite PR #128
 4. the effect algebra         what a row is; underpins 5
 5. verified effect rows       rung 3, the multiplier
 6. shared-state invariants    rung 4
@@ -426,7 +426,7 @@ is four defects with reproductions rather than a proposal.
 | document | state |
 |---|---|
 | [structured spec surface](structured-spec-surface.md) | **FILED** — [#124](https://github.com/dollspace-gay/Thermite/issues/124), [#125](https://github.com/dollspace-gay/Thermite/issues/125), [#126](https://github.com/dollspace-gay/Thermite/issues/126) |
-| [full words](full-words-anchor.md) | **ready** |
+| [full words](full-words-anchor.md) | **FILED** — [PR #128](https://github.com/dollspace-gay/Thermite/pull/128), on top of #127 |
 | [surface conventions](surface-conventions.md) | **ready** — the design record behind the anchor |
 | [the effect algebra](effect-algebra.md) | **ready** |
 | [verified effect rows](verified-effect-rows.md) | **ready** — migration, kernel break and cert impact all stated |
@@ -448,7 +448,9 @@ Read in order, the work is small and gets larger:
    adds a front-matter field feeding the REQ registry. **Filed** as
    [PR #127](https://github.com/dollspace-gay/Thermite/pull/127), with its gate
    script, its own requirements, and the migration done.
-3. A rename with a migration tool and a corpus that still certifies.
+3. A rename with a migration tool and a corpus that still certifies. **Filed**
+   as [PR #128](https://github.com/dollspace-gay/Thermite/pull/128), with the
+   spike, the counts and the certification table attached.
 
 Nothing after that is proposed until those land, because a surface nobody adopted
 is not a foundation for six proposals.
