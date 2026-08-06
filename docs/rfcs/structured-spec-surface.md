@@ -4,6 +4,15 @@
 below is something the language already intends to support, reproduced against
 Thermite at the pin.
 
+**Filed upstream 2026-08-05**, one issue per item, because each has its fix in a
+different file:
+
+| item | issue |
+|---|---|
+| 1. the `nat` rewrite | [#124](https://github.com/dollspace-gay/Thermite/issues/124) |
+| 2. the wrapper has no `View` | [#125](https://github.com/dollspace-gay/Thermite/issues/125) |
+| 3. the combinator walk | [#126](https://github.com/dollspace-gay/Thermite/issues/126) |
+
 ## Summary
 
 Collections and recursive data have a complete *executable* surface and an

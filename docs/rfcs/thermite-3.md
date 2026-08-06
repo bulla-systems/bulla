@@ -357,7 +357,7 @@ would rename. The anchor leaves them, because
 ## The sequence
 
 ```
-1. defects                    issues, with reproductions — earns the standing
+1. defects                    FILED — #124, #125, #126
 2. the RFC process            creates the vehicle; without it there is nowhere to file
 3. the anchor                 syntax only — full-words-anchor.md
 4. the effect algebra         what a row is; underpins 5
@@ -404,7 +404,7 @@ is four defects with reproductions rather than a proposal.
 
 | document | state |
 |---|---|
-| [structured spec surface](structured-spec-surface.md) | **ready** — as issues, not an RFC |
+| [structured spec surface](structured-spec-surface.md) | **FILED** — [#124](https://github.com/dollspace-gay/Thermite/issues/124), [#125](https://github.com/dollspace-gay/Thermite/issues/125), [#126](https://github.com/dollspace-gay/Thermite/issues/126) |
 | [full words](full-words-anchor.md) | **ready** |
 | [surface conventions](surface-conventions.md) | **ready** — the design record behind the anchor |
 | [the effect algebra](effect-algebra.md) | **ready** |
