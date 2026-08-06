@@ -105,11 +105,16 @@ to be carried by an ordering convention is carried by the `interleaves` block
 instead.
 
 **This is a breaking reorder.** Today the enforced order is `req` ×1, `ens` ×1+,
-`fx` ×1 last (`parse_contract`, parser.md REQ-2), verified by probe: `ens` before
-`req`, `fx` first, and a second `req` after `ens` all fail with
-`clause 'req' is out of order in 'f'`. Moving the effect row from last to first
-invalidates every existing `.th`. The change is mechanical, and it was not stated
-in the previous draft of this document.
+`fx` ×1, then an optional `dec` (`parse_contract`, parser.md REQ-2), verified by
+probe: `ens` before `req`, `fx` first, and a second `req` after `ens` all fail
+with `clause 'req' is out of order in 'f'`. Moving the effect row from there to
+the front invalidates every existing `.th`. The change is mechanical, and it was
+not stated in the previous draft of this document.
+
+The row is **not last**, which an earlier draft of this section claimed. A
+recursive function's `dec` follows it — `examples/editor/editor.th` reads
+`ens … fx pure … dec end - i` — and the round-trip check on the migration tool
+is what surfaced it, on one file out of 67.
 
 ## Decisions
 
