@@ -4,7 +4,13 @@ The surface, in full, with each construct marked by when it lands and where its
 design lives. Read top to bottom it is a specification; read the status column it
 is a roadmap.
 
-**Status: provisional, and ours.** Nothing here has been proposed upstream.
+**Status: FILED** as [Thermite RFC-7 / PR #129](https://github.com/dollspace-gay/Thermite/pull/129),
+stacked on the anchor. The upstream copy is adapted — links to sibling documents
+here become forward references, since those documents are not upstream — and it
+asks for a direction check rather than for any capability.
+
+The sequencing rule below is unaffected: the *horizon* is filed, and steps 4
+through 9 stay unfiled until the anchor lands.
 
 ## The name is borrowed, not invented
 
@@ -435,6 +441,7 @@ is four defects with reproductions rather than a proposal.
 | [interference clauses](interference-clauses.md) | **ready** — the lowering hypothesis is discharged, with the stability gap recorded |
 | [protocol types](protocol-types.md) | ready as a document; depends on resource types landing |
 | [the crash clause](crash-clause.md) | **ready** — the crash model is named as the gate, with a first model stated |
+| **this document** | **FILED** — [PR #129](https://github.com/dollspace-gay/Thermite/pull/129), the horizon, on top of #128 |
 
 ## The cost of each step
 
@@ -452,8 +459,11 @@ Read in order, the work is small and gets larger:
    as [PR #128](https://github.com/dollspace-gay/Thermite/pull/128), with the
    spike, the counts and the certification table attached.
 
-Nothing after that is proposed until those land, because a surface nobody adopted
-is not a foundation for six proposals.
+Nothing after step 3 is proposed until those land, because a surface nobody
+adopted is not a foundation for six proposals. Filing this document as RFC-7 is
+not an exception to that: it proposes no capability and introduces no
+requirement, and it exists so the anchor reads as one step of a stated plan
+rather than as five keyword renames. Steps 4 through 9 stay unfiled.
 
 ## The whole surface in one file
 
