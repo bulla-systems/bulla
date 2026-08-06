@@ -61,6 +61,76 @@ ROW_V3 = re.compile(r"^(\s*)!(\s+)(.*)$")
 #
 #   fn id(x: u32) -> u32 req true ens result == x fx pure { x }
 #
+# 373 sites across 83 files. Four things make it harder than it looks, and the
+# last one is decisive:
+#
+#   1. Reassembly must preserve inter-clause whitespace exactly. Solvable: capture
+#      each clause as (whitespace, keyword, rest) and permute whole triples, so
+#      the output is a permutation of the input's pieces.
+#   2. `!` is unambiguous in Thermite source — 144 rows and no other line-initial
+#      `!` across the corpus — but emitted Rust contains `-> !`, the never type,
+#      and these literals are full of emitted Rust.
+#   3. Clause keywords may carry a `@bv` tag: `ens@bv64 a + b == b + a`.
+#   4. **The last clause's text runs to the end of the line, which includes the
+#      function body.** Moving the row to the front drags `{ a + b }` with it.
+#      Knowing where a contract ends and a body begins is parsing, not matching.
+#
+# The tractable route is two passes rather than one clever one: reformat an
+# inline contract onto separate lines first — a simpler and independently
+# reversible change that moves nothing — and then the line-start migration above
+# handles it unaltered.
+
+
+CLAUSE_V3 = re.compile(r"^(\s*)(requires|ensures|keeps|measures)(\s+)(.*)$")
+ROW_V3 = re.compile(r"^(\s*)!(\s+)(.*)$")
+
+
+# A whole contract may sit on one line:
+#
+#   fn id(x: u32) -> u32 req true ens result == x fx pure { x }
+#
+# Splitting on the clause words is safe because they are reserved: no identifier
+# can be `req`, so a keyword match is always a clause head.
+#
+# The reassembly is what has to be exact. A clause is captured as the triple
+# (whitespace before the keyword, the keyword, everything up to the next
+# keyword), and reordering permutes whole triples. Every character therefore
+# survives — the output is a permutation of the input's pieces, so reversing the
+# permutation restores it byte for byte. An earlier attempt rebuilt the line as
+# `f"{kw} {rest.lstrip()}"`, which normalised the spacing and dropped the
+# round-trip from 384/384 to 329/384.
+INLINE_V2 = re.compile(r"(\s+)(req|ens|fx|dec)(?=\s)")
+INLINE_V3 = re.compile(r"(\s+)(requires|ensures|measures|!)(?=\s)")
+
+
+def _inline(line: str, to_v3_dir: bool) -> str:
+    pat = INLINE_V2 if to_v3_dir else INLINE_V3
+    hits = list(pat.finditer(line))
+    if not hits:
+        return line
+    head = line[: hits[0].start()]
+    triples = []
+    for k, m in enumerate(hits):
+        end = hits[k + 1].start() if k + 1 < len(hits) else len(line)
+        triples.append((m.group(1), m.group(2), line[m.end():end]))
+    if to_v3_dir:
+        row = [t for t in triples if t[1] == "fx"]
+        rest = [t for t in triples if t[1] != "fx"]
+        order = [(w, "!", r) for w, _, r in row] + [(w, V2_TO_V3.get(k, k), r) for w, k, r in rest]
+    else:
+        row = [t for t in triples if t[1] == "!"]
+        mid = [t for t in triples if t[1] not in ("!", "measures")]
+        tail = [t for t in triples if t[1] == "measures"]
+        order = ([(w, V3_TO_V2.get(k, k), r) for w, k, r in mid]
+                 + [(w, "fx", r) for w, _, r in row]
+                 + [(w, V3_TO_V2.get(k, k), r) for w, k, r in tail])
+    return head + "".join(w + k + r for w, k, r in order)
+
+
+# PREVIOUSLY NOT HANDLED, now above:
+#
+#   fn id(x: u32) -> u32 req true ens result == x fx pure { x }
+#
 # 373 sites across 83 files. Splitting on the clause words is safe, since they
 # are reserved and no identifier can be one — but reassembly has to restore the
 # inter-clause whitespace exactly, and many of these sit inside Rust string
@@ -116,7 +186,8 @@ def _lines_to_v3(lines: list[str]) -> list[str]:
     i = 0
     while i < len(lines):
         if not CLAUSE_V2.match(lines[i]):
-            out.append(TRAILING_INV_V2.sub(r"\1keeps\2", lines[i]))
+            line = TRAILING_INV_V2.sub(r"\1keeps\2", lines[i])
+            out.append(line)
             i += 1
             continue
 
@@ -147,7 +218,8 @@ def _lines_to_v2(lines: list[str]) -> list[str]:
     i = 0
     while i < len(lines):
         if not (CLAUSE_V3.match(lines[i]) or ROW_V3.match(lines[i])):
-            out.append(TRAILING_INV_V3.sub(r"\1inv\2", lines[i]))
+            line = TRAILING_INV_V3.sub(r"\1inv\2", lines[i])
+            out.append(line)
             i += 1
             continue
 

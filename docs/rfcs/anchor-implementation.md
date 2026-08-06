@@ -179,12 +179,26 @@ The spike is a spike. Four things remain before this is landable, and the first
 is the one that blocks the test suite:
 
 **Inline contracts.** `fn id(x: u32) -> u32 req true ens result == x fx pure { x }`
-— a whole contract on one line, 373 sites across 83 files. The migration tool
-does not handle them, and an attempt dropped its round-trip from 384/384 to
-329/384, so it was backed out rather than left wrong. Reassembly must restore
-inter-clause whitespace exactly, and many of these sit inside Rust string
-literals spanning physical lines with `\` continuations. This is the next piece
-of tool work.
+— a whole contract on one line, 373 sites across 83 files. Attempted twice and
+backed out both times, which is worth recording because the reasons compound:
+
+1. **Whitespace.** Reassembly must be exact. Solvable — capture each clause as
+   (whitespace, keyword, rest) and permute whole triples, so the output is a
+   permutation of the input's pieces. A first attempt normalised the spacing and
+   dropped the round-trip from 384/384 to 329/384.
+2. **`!` is not a reliable marker in emitted Rust.** It is unambiguous in
+   Thermite source — 144 rows and no other line-initial `!` across the corpus —
+   but these literals contain generated Rust, where `-> !` is the never type.
+3. **Clause keywords may carry a `@bv` tag**: `ens@bv64 a + b == b + a`.
+4. **The last clause's text runs to end of line, which includes the function
+   body.** Moving the row to the front drags `{ a + b }` with it. Knowing where a
+   contract ends and a body begins is parsing, not matching — and that is the one
+   that makes a regex approach the wrong shape rather than an incomplete one.
+
+**The tractable route is two passes rather than one clever one.** Reformat an
+inline contract onto separate lines first — a simpler transformation that moves
+nothing and is independently reversible — and the line-start migration then
+handles it unaltered. Splitting the problem is cheaper than solving it whole.
 
 **Conjunct blocks**, **`requires nothing`**, and **one-or-more `requires`** are
 in the anchor and not in the spike. They add productions rather than rename
