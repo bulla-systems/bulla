@@ -11,50 +11,110 @@ unusually good fit, because the protocol is known at build time.
 
 ## Proposal
 
+A protocol is a **sequence of turns**, each labelled with the role whose turn it
+is, ending in `end`:
+
 ```thermite
-protocol PageRequest repeats {
-  user     { op: u32, count: u64 },
-  provider { status: u32, base: u64 },
+protocol PageRequest {
+  User     { op: u32, count: u64 },
+  Provider { status: u32, base: u64 },
+  end
 }
 
-fn pager(c: provides PageRequest) -> ()
+fn pager(c: PageRequest::Provider) -> ()
   ! blocks
   requires  nothing
   ensures   nothing
 
-fn app(c: uses PageRequest) -> ()
+fn app(c: PageRequest::User) -> ()
   ! blocks
   requires  nothing
   ensures   nothing
 ```
 
-Each step is labelled with whose turn it is, so direction needs no glyph. The
-body names **roles** and a signature conjugates the role into what the parameter
-does — nouns where there is no single subject, verbs where the function is the
-subject, which is the rule that governs clauses applied where it applies.
+Roles are **names, not keywords**, so a protocol says what its roles are in its
+own domain — `Reader`/`Writer`, `Initiator`/`Responder`, `Coordinator`. Two
+reserved words could never fit all of those. They are capitalised because they
+are types: `PageRequest::Provider` is the type of that endpoint.
 
-`provides` and `uses` name what an endpoint offers rather than its position in a
-topology, and the endpoint type stands alone — no `Channel<>` wrapper, because
-the endpoint *is* the type. `dual` was rejected as a mathematician's word for the
-mirror of a thing, and `client`/`server` bakes in an assumption about who
+An earlier draft used `provides PageRequest` and `uses PageRequest`. The path
+form is better on two counts. It is a **noun in a type position**, where the
+subject is `c` rather than the function — `c` does not provide anything, it *is*
+an endpoint — and the verb form violated the same rule it was chosen to satisfy.
+And it **generalises**: `Transfer::Coordinator` is well-formed for any number of
+roles, where two verbs cannot name three parties and there is no third word
+meaning "the other other one". `dual` was rejected as a mathematician's word for
+the mirror of a thing, and `client`/`server` bakes in an assumption about who
 connects to whom.
 
-Closing the braces ends the session. `repeats` in the header says it loops, which
-is the common case for a long-lived server and the reason an `end` marker is not
-needed in the body — a floating terminator among the turns reads as one more
-turn, and the fact belongs where a reader meets it first.
+`end` is the last element of the sequence rather than a marker floating after it.
+That is what it is: in the theory a session type is `!T . ?U . end`, and `end` is
+a type. A header flag saying the protocol repeats was tried and withdrawn,
+because real repetition is *conditional* — a server loops until told to close —
+so termination is a branch:
 
-Branching, which real protocols need:
+```thermite
+protocol PageStream {
+  User     { op: u32, count: u64 },
+  Provider { status: u32, base: u64 },
+  repeat | end
+}
+```
+
+**A branch costs a message.** If the User decides `end` while the Provider is
+still waiting, the Provider waits forever, so the choice has to be transmitted.
+`repeat | end` implies a discriminant on the wire, sent by whichever party acts
+next — here the first role, since repeating restarts with it, which makes the
+chooser inferable in this case. General branching needs the chooser named:
 
 ```thermite
 protocol Request {
-  user { op: u32 },
-  picks {
-    ok:  provider { value: u64 },
-    err: provider { code: u32 },
-  },
+  User picks {
+    ok:  { op: u32 }    then Provider { value: u64 },
+    err: { }            then end,
+  }
 }
 ```
+
+**Termination is load-bearing rather than cosmetic.** An endpoint is a
+`resource`, so it must be consumed exactly once, and what consumes it is running
+the protocol to completion. A protocol that never ends has an endpoint that can
+never be released, and the linearity obligation becomes undischargeable. So
+rung 7 needs `end` to be compatible with rung 5.
+
+## Binary is a degenerate global type
+
+Worth fixing now, because the alternative framing does not survive contact with a
+third party.
+
+The syntax above is a **global type** — it describes the session from outside,
+naming who sends at each step, rather than describing one endpoint's view. That
+matters because duality does not generalise. Duality is a binary operation, and
+with three roles there is no "the dual"; worse, pairwise duality does not
+compose. Three pairwise-dual channels can deadlock in a cycle, with every
+pairwise check passing.
+
+The multiparty answer (Honda, Yoshida, Carbone, 2008) replaces duality with
+**projection**: write one global type, project it onto each role to get that
+role's local type, and check each implementation against its own projection.
+Consistency holds by construction because all the local types come from one
+source.
+
+So `PageRequest::Provider` *is* the projection `G ↾ Provider`, and for two roles
+projection coincides with duality. Specifying binary this way costs nothing now —
+projection onto two roles is duality — and means a later multiparty extension
+adds cases to a function rather than replacing the framing.
+
+What multiparty would need is both parties named per step, since "User sends" is
+only unambiguous when there is exactly one other party. That is a notation
+change, and it is where the arrow would earn its way back, since `A → B` is a
+labelled edge where the symbol is the concept.
+
+**Deadlock freedom is free for binary and not for multiparty.** Duality gives it
+structurally for two parties. A well-formed global type gives communication
+safety and protocol fidelity for many, and progress within one session, but
+cyclic waits across several interleaved sessions need more. This RFC proposes
+binary only, and that is the reason.
 
 ## What a hand-encoded session already gives
 

@@ -186,7 +186,7 @@ An earlier version of this rule said the row *names what the signature does not*
 That does not discriminate the case it was written for:
 `acknowledge(s: &mut Shoot, cpu: u64)` takes the shared state as a parameter too,
 and `&mut Shoot` names a type rather than an identity in the same way
-`c: provides PageRequest` does.
+`c: PageRequest::Provider` does.
 
 The version above also absorbs a caveat the earlier one had to state as an
 exception. If a channel endpoint were ever reachable from global state, the rule
@@ -226,7 +226,7 @@ endpoint is a `resource` value, so ownership already establishes exclusivity and
 there is nothing to name. The function does have an effect — it can wait.
 
 ```thermite
-fn pager(c: provides PageRequest) -> ()   ! blocks
+fn pager(c: PageRequest::Provider) -> ()   ! blocks
 ```
 
 `blocks` is liveness-relevant, so it is recorded and not proved, which is the
@@ -321,18 +321,21 @@ bakes in a topology assumption; `Channel<send T>` misreads as "a channel you sen
 `T`s on" — a message type rather than a role.
 
 ```thermite
-protocol PageRequest repeats {
-  user     { op: u32, count: u64 },
-  provider { status: u32, base: u64 },
+protocol PageRequest {
+  User     { op: u32, count: u64 },
+  Provider { status: u32, base: u64 },
+  end
 }
 
-fn pager(c: provides PageRequest) -> () ! blocks
-fn app(c: uses PageRequest)       -> () ! blocks
+fn pager(c: PageRequest::Provider) -> () ! blocks
+fn app(c: PageRequest::User)       -> () ! blocks
 ```
 
-`provides` / `uses` reads as English, carries no topology assumption, and the
-endpoint type stands alone — no `Channel<>` wrapper needed, because the endpoint
-*is* the type.
+Roles are names rather than keywords, so a protocol names its own, and an
+endpoint type is a path to one. It is a noun in a type position — `c` does not
+provide anything, it *is* an endpoint — and it generalises to any number of
+roles, where two verbs cannot name three parties. No `Channel<>` wrapper is
+needed, because the endpoint *is* the type.
 
 ### A clause body is a block of conjuncts
 
