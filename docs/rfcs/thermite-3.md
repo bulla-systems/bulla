@@ -367,8 +367,8 @@ The first proposal changes **no expressive power whatsoever**. Written out as
 [full words](full-words-anchor.md), which is the document to hand someone.
 
 Five renames — `req` `ens` `inv` `dec` `fx` — plus the row moving to the front,
-the fixed clause order, conjunct blocks, and `requires nothing`. 567 clause
-sites across 69 files, a deterministic rewrite, certificates unaffected.
+the fixed clause order, conjunct blocks, and `requires nothing`. 547 clause
+sites across 67 files, a deterministic rewrite, certificates unaffected.
 
 **One deliberate exception.** `alloc` and `rand` are abbreviations that rule 1
 would rename. The anchor leaves them, because

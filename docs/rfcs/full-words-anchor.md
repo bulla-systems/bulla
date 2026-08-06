@@ -128,69 +128,86 @@ it read as type-level rather than predicate-level.
 
 ## Migration
 
-**Every clause site in the corpus changes.** Measured across the 69 `.th` files
-at `84d276e7`:
+**Every clause site in the corpus changes.** Counted by the pinned lexer across
+the 67 `.th` files tracked at `84d276e7` — a `req` token is a clause and an
+identifier spelled `req` is not, which is the distinction a textual count cannot
+make:
 
 | | sites |
 |---|---|
-| `ens` | 208 |
-| `req` | 160 |
-| `fx` | 150 |
-| `dec` | 31 |
-| `inv` | 18 |
-| **total** | **567**, across 155 items |
-| `req true` | 108 |
+| `ens` | 205 |
+| `req` | 152 |
+| `fx` | 145 |
+| `dec` | 26 |
+| `inv` | 19 |
+| **total** | **547**, across 144 contracts |
+| `req true` | 100 |
+| `ens true` | 2 |
+
+> **Corrected 2026-08-06.** This table previously read 208/160/150/31/18, 567
+> across 155 items, over "the 69 `.th` files". The corpus is **67** files:
+> `git ls-files '*.th'` at the pin. The 69 counted `src/context.th` and
+> `src/p.th` — Bulla's own probe files, left in the build clone when the count
+> was taken — as part of Thermite's corpus, and they carry 19 clause sites
+> between them. The figures above are the lexer's, on a `git archive` export of
+> the pin, so they are reproducible with one command and carry no probe residue.
 
 Three things make that affordable.
 
-**It is mechanical, and the tool exists.** `thermite-migrate.py` is a
-source-to-source rewrite rather than a parse-and-print, so comments, blank lines
-and expression text survive untouched — a formatter would produce a diff nobody
-can review, and this change does not need one. A clause runs from its keyword
-until its expression closes, tracked by delimiter balance, so a clause whose
-expression wraps across lines moves as one unit.
+**It is mechanical.** A rename plus a fixed reorder is a deterministic
+source-to-source rewrite: nothing about it depends on what a program means. The
+migration edits spans rather than reprinting files, so comments, blank lines,
+expression text and alignment survive untouched. A formatter would produce a diff
+nobody can review, and this change does not need one.
 
-**And it is proved information-preserving rather than argued to be.** The tool
-rewrites in both directions, so the claim is checkable before any parser accepts
-the new surface:
+**The front end drives it, so the hard case is exact.** The hard case is a
+contract written on one line, which is most of the test corpus:
 
-```
-$ thermite-migrate.py --check --rust .
-round-trip: 384/384 files restore byte for byte
-clause-bearing literals with no effect row, left for review: 518
+```thermite
+fn id(x: u32) -> u32 req true ens result == x fx pure { x }
 ```
 
-`to_v2(to_v3(x)) == x` for every file in the workspace — the corpus, and the
-`.th` fragments embedded in Rust string literals, which is where most of the
-volume lives. That includes the 24 clauses whose expressions wrap across lines.
+Moving the row to the front means knowing where the contract ends and the body
+begins, and that is parsing rather than matching. A rewriter linking
+`thermite-syntax` takes item boundaries from `parse` and every offset from
+`tokenize`; two facts from the grammar then settle it. A clause keyword is a
+reserved token, so `TokKind::Req` is a clause and an identifier spelled `req`
+cannot be one. And `parse_effect_row` is a closed grammar containing no brace, so
+the row ends at the first token that cannot continue it and the body's `{` is
+whatever follows.
 
-The second line is the tool reporting what it deliberately did **not** touch.
-Three things must not be rewritten, and each was found by a failure that the
-previous rule let through:
+Measured on a `git archive` export of the pin:
 
-| must not rewrite | why the earlier rule missed it |
+| | |
 |---|---|
-| assertions on lowered Verus | the two vocabularies agree after the rename |
-| prose such as `"inv text is the verbatim clause source"` | renaming a sentence is perfectly reversible |
-| expected Verus output that declares items | it has `pub fn` too |
+| `.th` corpus | **66 of 67 migrate**, with no clause keyword surviving |
+| the one decline | `conformance/parse/recover_per_item.th`, whose purpose is to not parse |
+| `.th` fragments in Rust literals | **450 migrate**, carrying 1,527 clause sites across 111 files |
+| declined, carrying no clause keyword | 340, where declining costs nothing |
+| declined and clause-bearing | **43**: `format!` templates, assertion prose, and fixtures that are invalid on purpose |
 
-What separates them is that **Thermite's effect row is mandatory and Verus has no
-equivalent**, so the row is the fingerprint of a Thermite fragment. A per-literal
-reversibility check backs it up: the tool only rewrites what it can prove it can
-restore, and reports the rest rather than guessing. That is a stronger check than re-certifying, which cannot
-be run at all until the front end changes.
+Parsing both sides and comparing ASTs is then available as the migration's
+check, which is meaning preservation rather than the textual kind.
 
-Two facts the round-trip forced into the open, both of which a diff-by-eye would
-have missed. The gap between a keyword and its expression is preserved verbatim
-rather than re-aligned, because column-preserving arithmetic is not invertible
-once it clamps — alignment is a formatter's job. And `fx` is **not last** in the
-current grammar: a recursive function's `dec` follows it, so the row must be
-restored before the measure rather than at the end.
+**What a text-matching tool could not check, recorded because it generalises.**
+An earlier rewriter matched a clause keyword at the head of a line and proved
+itself by round-trip — `to_v2(to_v3(x)) == x`, byte for byte, on 382 of 382
+files. That check is silent about text a tool never touches, because untouched
+text is restored perfectly, and the silence hid two things: every one-line
+contract, and 17 `@bv`-tagged clauses across 10 files that the pattern did not
+match. A migrated corpus would have carried `ens@bv64` into a front end with no
+`ens` keyword. Reversibility is worth having and does not measure coverage.
+
+It did force two facts into the open that a diff-by-eye would have missed. The
+gap between a keyword and its expression is preserved verbatim rather than
+re-aligned, because column-preserving arithmetic is not invertible once it
+clamps. And `fx` is **not last** in the current grammar — a recursive function's
+`dec` follows it — so the row moves out from the middle rather than off the end.
 
 **The one non-mechanical part is optional.** A naive rewriter emits
 `requires true` rather than `requires nothing`. That stays legal — `true` remains
 legal inside expressions and the sugar is clause-level only — so adopting it is a
-second pass over 108 sites rather than a correctness condition.
+second pass over 100 sites rather than a correctness condition.
 
 **Certificates survive**, and this was checked rather than assumed. The
 `.cert.json` oracle subset is `item` / `level` / `tautology` /
@@ -223,8 +240,9 @@ decision rather than an oversight.
 [A measured work plan](anchor-implementation.md) scopes it against the tree: the
 compiler change is five keyword entries, five token variants, one ordering
 change in `parse_contract`, and two lines in the address allowlist. The volume is
-elsewhere — 619 clause lines embedded in 66 Rust test files, which the migration
-tool does not reach because they live inside string literals.
+elsewhere: **1,527 clause sites live inside Rust string literals**, across 450
+`.th` fragments in 111 test files, against 547 in the `.th` corpus itself. Three
+quarters of the migration is in the test suite.
 
 The migration and the parser change are **one PR rather than two**, because no
 front end accepts the new surface until the parser moves, so a migrated corpus

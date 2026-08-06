@@ -149,7 +149,7 @@ undeclared name is an error.
 `alloc` belongs to is a judgement about what the program shares, not a
 transformation of its text. Contrast
 [the surface conventions](surface-conventions.md#migration), whose much larger
-break — all 567 clause sites — is a deterministic rewrite precisely because
+break — all 547 clause sites — is a deterministic rewrite precisely because
 nothing about it depends on what the program means.
 
 **And unlike a rename, this one invalidates certificates.** `effects` is in the

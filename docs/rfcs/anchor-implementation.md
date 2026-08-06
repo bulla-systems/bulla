@@ -18,16 +18,16 @@ place and almost all of the *volume* is in another:
 | references to those variants across the workspace | **53** |
 | address-allowlist lines | **2** |
 | clause names appearing as error strings | several, in `parser.rs` |
-| `.th` corpus files | **65** — the migration tool rewrites these |
-| Rust files embedding `.th` source in string literals | **114**, carrying **762** clause lines |
+| `.th` corpus files | **67** — `git ls-files '*.th'` at the pin |
+| Rust files carrying `.th` fragments that parse | **111**, carrying **1,527** clause sites |
 | address strings to rename (`ens#k` → `ensures#k`) | **114**, across 27 files |
 | clause words in doc-comment prose | 2,149 — judgement, not mechanism |
 | golden/oracle directories | 22 |
 | design docs mentioning the clauses | 52 |
 
 **The compiler change is small and the test corpus is the schedule.** The number
-to plan around is 762 clause lines in string literals across 114 Rust files:
-`thermite-migrate.py` does not reach them, because they are not `.th` files.
+to plan around is 1,527 clause sites inside Rust string literals, against 547 in
+the `.th` corpus itself: three quarters of the migration is in the test suite.
 
 A first count lumped three different treatments together and overstated the
 mechanical work. They are distinct:
@@ -50,8 +50,10 @@ downstream references do not move.
 parser production rather than a new token.
 
 **The row is unambiguous by position**, checked rather than assumed. Migrating
-the whole corpus and scanning every line gives **144 row lines and zero other
-lines beginning with `!`**. The three clause expressions that start with a
+the whole corpus and scanning every line gives **142 lines opening with a row and
+zero lines opening with `!` that are not one**. The other three of the lexer's
+145 `fx` tokens are accounted for: one inline row in `conformance/review/vacuous.th`,
+and two in `conformance/parse/recover_per_item.th`, which does not parse by design. The three clause expressions that start with a
 negation — `ens !result || p.count > 0` and friends — are unaffected, because the
 `!` follows a keyword and never opens a line.
 
@@ -98,12 +100,12 @@ space-bearing segment is rejected as malformed before any lookup.
 $ thermite-migrate.py --write conformance examples src
 ```
 
-Proved information-preserving by round-trip on all 67 files, including the 24
+Proved information-preserving by round-trip on all 67 `.th` files, including the 24
 whose clause expressions wrap across lines.
 
 ### 6. The embedded test corpus — the actual work
 
-762 clause lines inside 114 Rust files. The heaviest are conformance suites:
+1,527 clause sites inside 111 Rust files. The heaviest are conformance suites:
 
 ```
 45  forge/tests/operators_conformance.rs
@@ -117,14 +119,14 @@ These are `.th` fragments in string literals, and **the tool now handles them**:
 
 ```
 $ thermite-migrate.py --check --rust .
-round-trip: 384/384 files restore byte for byte
-clause-bearing literals with no effect row, left for review: 518
+round-trip: 382/382 files restore byte for byte
+clause-bearing literals with no effect row, left for review: 516
 ```
 
 It rewrites a literal only when the literal declares an item, carries an effect
 row, and round-trips reversibly on its own. The row is what distinguishes a
 Thermite fragment from *expected lowered Verus*, which also declares items and,
-after the rename, uses the same clause words. The 518 it declines are for review
+after the rename, uses the same clause words. The 516 it declines are for review
 rather than silent rewriting; most are expected output and prose, and some are
 genuine `struct … inv` fragments with no `fn` to carry a row.
 
@@ -175,34 +177,48 @@ only information in the text.
 
 ## What is still undone
 
-The spike is a spike. Four things remain before this is landable, and the first
-is the one that blocks the test suite:
+The spike is a spike. Three things remain before this is landable.
 
-**Inline contracts.** `fn id(x: u32) -> u32 req true ens result == x fx pure { x }`
-— a whole contract on one line, 373 sites across 83 files. Attempted twice and
-backed out both times, which is worth recording because the reasons compound:
+**Inline contracts are handled, and the route changed.** A whole contract on one
+line —
 
-1. **Whitespace.** Reassembly must be exact. Solvable — capture each clause as
-   (whitespace, keyword, rest) and permute whole triples, so the output is a
-   permutation of the input's pieces. A first attempt normalised the spacing and
-   dropped the round-trip from 384/384 to 329/384.
-2. **`!` is not a reliable marker in emitted Rust.** It is unambiguous in
-   Thermite source — 144 rows and no other line-initial `!` across the corpus —
-   but these literals contain generated Rust, where `-> !` is the never type.
-3. **Clause keywords may carry a `@bv` tag**: `ens@bv64 a + b == b + a`.
-4. **The last clause's text runs to end of line, which includes the function
-   body.** Moving the row to the front drags `{ a + b }` with it. Knowing where a
-   contract ends and a body begins is parsing, not matching — and that is the one
-   that makes a regex approach the wrong shape rather than an incomplete one.
+```thermite
+fn id(x: u32) -> u32 req true ens result == x fx pure { x }
+```
 
-**The tractable route is two passes rather than one clever one.** Reformat an
-inline contract onto separate lines first — a simpler transformation that moves
-nothing and is independently reversible — and the line-start migration then
-handles it unaltered. Splitting the problem is cheaper than solving it whole.
+— defeated two attempts at a text rewriter, and the decisive reason was that the
+last clause's text runs to end of line and therefore contains the body, so moving
+the row drags `{ x }` with it. Knowing where a contract ends and a body begins is
+parsing rather than matching.
+
+The plan recorded here was two passes: reflow each contract onto separate lines,
+then run the existing line-start migration unaltered. Probing that showed the
+reflow still has to locate the same boundary, so it moved the problem rather than
+avoiding it. **The route is the front end.** A rewriter linking `thermite-syntax`
+takes item boundaries from `parse` and every offset from `tokenize`, then splices
+at spans. Two grammar facts make it exact: a clause keyword is a reserved token,
+so `TokKind::Req` is a clause and an identifier spelled `req` is not; and
+`parse_effect_row` is a closed grammar with no brace in it, so the row ends at the
+first token that cannot continue it and the body's `{` is whatever follows.
+
+Four traps recorded against the text approach dissolve rather than being solved.
+Whitespace reassembly stops being a category, because nothing outside a spliced
+span is touched. `-> !` in emitted Rust cannot be mistaken for a row, because
+emitted Rust does not parse as Thermite. `@bv` tags are tokens. And the boundary
+is the parser's answer rather than a heuristic.
+
+Measured on a `git archive` export of the pin: 66 of 67 `.th` files migrate with
+no clause keyword surviving, the decline being `conformance/parse/recover_per_item.th`,
+whose purpose is to not parse; and 450 Rust literals migrate, with 43 declined
+that carry clause keywords — `format!` templates, assertion prose, and fixtures
+invalid on purpose.
 
 **Conjunct blocks**, **`requires nothing`**, and **one-or-more `requires`** are
 in the anchor and not in the spike. They add productions rather than rename
 tokens, so they are the part that is genuinely new.
 
-**516 clause-bearing literals** the tool declines to touch, reported for review.
-Most are expected Verus output and prose; some are genuine fragments.
+**The check changes with the route.** A round-trip proves information
+preservation and is silent about coverage: it hid every inline contract and 17
+`@bv`-tagged clauses across 10 files, because text a tool never touches is
+restored perfectly. Parsing both sides and comparing ASTs is the replacement, and
+it checks meaning rather than text.

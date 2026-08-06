@@ -479,18 +479,24 @@ tractable, and `ensures` already exists on `fn`.
 
 This document renames every clause in the language, so the break is total rather
 than partial and the size is worth stating rather than implying. Measured across
-the 69 `.th` files at the pin:
+the 67 `.th` files tracked at the pin, counted by the pinned lexer:
 
 | | sites | change |
 |---|---|---|
-| `ens` | 208 | → `ensures` |
-| `req` | 160 | → `requires` |
-| `fx` | 150 | → `!`, and **moves from last to first** |
-| `dec` | 31 | → `measures`, and moves to last |
-| `inv` | 18 | → `keeps` |
-| **total clause sites** | **567** | across 155 items |
-| `req true` | 108 | → `requires nothing` |
+| `ens` | 205 | → `ensures` |
+| `req` | 152 | → `requires` |
+| `fx` | 145 | → `!`, and **moves from last to first** |
+| `dec` | 26 | → `measures`, and moves to last |
+| `inv` | 19 | → `keeps` |
+| **total clause sites** | **547** | across 144 contracts |
+| `req true` | 100 | → `requires nothing` |
 | `ens true` | 2 | → `ensures nothing` |
+
+> **Corrected 2026-08-06.** Previously 567 across 155 items over "the 69 `.th`
+> files". The corpus is 67 files; the 69 counted two of Bulla's probe files left
+> in the build clone, carrying 19 clause sites between them. Recorded rather than
+> silently replaced, because the error shape — measuring someone else's tree
+> through our own working copy — is one this project should recognise again.
 
 Every clause site in the corpus changes. That is a larger break than
 [verified effect rows](verified-effect-rows.md)'s, which touches 50 of 149 effect
@@ -508,7 +514,7 @@ belongs to needs a human.
 is a change of meaning-preserving spelling, not of syntax. A naive rewriter emits
 `requires true`, which stays legal — `true` remains legal inside expressions and
 the sugar is clause-level only. So the tool produces working code, and adopting
-the sugar is an optional second pass over 110 sites rather than a correctness
+the sugar is an optional second pass over 100 sites rather than a correctness
 condition.
 
 **Certificates survive.** This is the part worth checking rather than assuming.

@@ -50,7 +50,7 @@ compress.
   at `84d276e`.
 - **The migrated corpus certifies identically** — 18 items across 6 files, same
   L3 counts as baseline. That is the check the round-trip cannot make.
-- **The migration tool round-trips 384/384 files byte for byte**
+- **The migration tool round-trips 382/382 files byte for byte**
   (`tooling/migrate/thermite-migrate.py --check --rust .`).
 
 ### What is undone, and it is specific
