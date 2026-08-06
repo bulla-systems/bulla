@@ -9,7 +9,7 @@ is a roadmap.
 ## The name is borrowed, not invented
 
 Upstream already numbers generations:
-[RFC-1](https://github.com/dollspace-gay/Thermite/issues/2), "Thermite 2 — a
+[#2](https://github.com/dollspace-gay/Thermite/issues/2), "Thermite 2 — a
 dependent-type tier, a stratified cage, and new ladder boundaries." There is a
 convention for a generational proposal and this follows it.
 

@@ -36,13 +36,19 @@ currently in that state.
 They were, and the numbers collided with Thermite's own.
 
 Thermite allocates RFC numbers in its **GitHub issues**:
-[RFC-1](https://github.com/dollspace-gay/Thermite/issues/2) (Thermite 2 — a
+[#2](https://github.com/dollspace-gay/Thermite/issues/2) (Thermite 2 — a
 dependent-type tier, a stratified cage, and new ladder boundaries),
-[RFC-2](https://github.com/dollspace-gay/Thermite/issues/119) (the certification
-surface), and [RFC-3](https://github.com/dollspace-gay/Thermite/issues/120)
-(versioning). This directory's `001`–`003` sat on top of all three, and
-[the assurance model](../assurance-model.md) cites *upstream's* RFC-2 while this
-directory held a different one under the same name.
+[#17](https://github.com/dollspace-gay/Thermite/issues/17) (the canonical REQ
+registry, filed without a number),
+[#119](https://github.com/dollspace-gay/Thermite/issues/119) (the certification
+surface), and [#120](https://github.com/dollspace-gay/Thermite/issues/120)
+(versioning). This directory's `001`–`003` sat on top of them, and
+[the assurance model](../assurance-model.md) cites upstream's certification-surface
+RFC while this directory held a different one under the same number.
+
+Cited by issue rather than by RFC number, because the upstream sequence is being
+renumbered chronologically — #17 was never numbered — and an issue number never
+changes.
 
 Renumbering into the same sequence moves the collision rather than removing it,
 because two authorities allocating from one counter is what produced it. A number

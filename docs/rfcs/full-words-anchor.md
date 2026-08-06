@@ -171,6 +171,6 @@ A review and a CI run. The corpus certifies before and after, the migration is a
 tool rather than a hand edit, and no proof obligation anywhere changes.
 
 It is also a **version-number event**, which makes it a concrete test case for
-[RFC-3](https://github.com/dollspace-gay/Thermite/issues/120), "Versioning — what
+[#120](https://github.com/dollspace-gay/Thermite/issues/120), "Versioning — what
 a Thermite version number promises": a breaking change to every source file, with
 an automated migration, and no change to what any program proves.

@@ -2,10 +2,10 @@
 
 What a Bulla certificate claims, and the vocabulary for saying it.
 
-> **Tracking note.** This vocabulary follows Thermite RFC-2 (the certification
+> **Tracking note.** This vocabulary follows Thermite [#119](https://github.com/dollspace-gay/Thermite/issues/119) (the certification
 > surface), which is proposed and not yet accepted upstream. Until it lands,
 > Bulla records the full tuple internally and renders whatever Thermite's
-> shipped schema provides. If RFC-2 is rejected or changed, this document
+> shipped schema provides. If that RFC is rejected or changed, this document
 > changes with it.
 
 ## Why not a single level number
