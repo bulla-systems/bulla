@@ -609,11 +609,16 @@ true of both and keeps the parallel.
 resource struct Grant { base: u64, len: u64, generation: u64 }
   keeps  base + len <= MAX_PHYS
 
-loop {
+loop
   keeps     acked & !expected == 0
   measures  remaining
-}
+{ … }
 ```
+
+A loop's clauses sit between its head and its body, exactly as a function's sit
+between its signature and its body. Inside the braces they would read as
+statements and blend into the first real one. This is also what the language
+already does — `while i < n inv i <= n dec n - i { … }` certifies at L3 today.
 
 This renames a clause the corpus already uses, which no other decision here does.
 
