@@ -19,6 +19,27 @@ capability on top of the settled surface. That distinction is what makes the
 sequence work: the expensive-to-review part and the cheap-to-review part are
 separable, and the cheap one goes first.
 
+## Why, and what Bulla has to do with it
+
+The motivation is Thermite's own stated purpose. It is designed to be written
+principally by agents, and a surface built for that has requirements a
+human-authored one does not: a keyword's cost is not the tokens it spends but the
+prior it activates, and a clause read wrongly yields a vacuous proof rather than
+an error. `fx`, `dec` and `inv` are not merely terse — they point at effects,
+declarations and inverses. That is a gap between what the language is for and
+what it currently reads like, and closing it is the whole of the anchor.
+
+**Bulla's role is discovery, not entitlement.** It is a workload chosen to press
+on the language hard enough to find where the surface and the capability run out:
+a kernel needs structural predicates, shared state, ownership, interference and
+protocols, and it needs them in a form an agent can write correctly. Every gap
+in [docs/language-gaps.md](../language-gaps.md) was found by attempting something
+rather than by reading the reference, and several contradicted the documentation
+in both directions.
+
+What that buys is evidence, not standing. Bulla has no verified subsystem, and a
+proposal here earns its way on the design and the reproduction attached to it.
+
 ## The throughline
 
 One principle, and every document here inherits it:

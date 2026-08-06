@@ -7,11 +7,15 @@ Language proposals, each matched to a rung of [the ladder](../the-ladder.md).
 yet. They are worked out here first so that a proposal arrives finished rather
 than as a sketch, and so the reasoning survives if one is never made.
 
-Bulla is Thermite's demanding consumer rather than an outside petitioner — the
-gaps in this directory were found by trying to build a kernel against the pin,
-and this repository shares a maintainer with Thermite. What that buys is not
-deference; it is that a proposal here can be evaluated on the design rather than
-on who is asking.
+These exist because Thermite is designed to be written principally by agents, and
+the surface does not yet serve that purpose. A keyword's real cost is the prior it
+activates rather than the tokens it spends, and in a language where a misread
+clause yields a vacuous proof, that is a safety property.
+
+Bulla's part is discovery. It is a workload chosen to press hard enough to find
+where the surface and the capability run out, and every gap recorded here was
+found by attempting something rather than by reading the reference. What that
+buys is evidence rather than standing.
 
 What we do file upstream is **defects with reproductions**, which is a
 contribution rather than a request. The spec-surface document is the only one
