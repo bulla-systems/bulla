@@ -47,8 +47,27 @@ V2_TO_V3 = {"req": "requires", "ens": "ensures", "inv": "keeps", "dec": "measure
 V3_TO_V2 = {v: k for k, v in V2_TO_V3.items()}
 
 CLAUSE_V2 = re.compile(r"^(\s*)(req|ens|fx|inv|dec)(\s+)(.*)$")
+# A struct or enum invariant may trail its closing brace on the same line:
+#   struct Account { balance: u64, } inv balance <= 1_000_000
+# The line-start form above never sees these.
+TRAILING_INV_V2 = re.compile(r"(\}\s*)inv(\s)")
+TRAILING_INV_V3 = re.compile(r"(\}\s*)keeps(\s)")
+
 CLAUSE_V3 = re.compile(r"^(\s*)(requires|ensures|keeps|measures)(\s+)(.*)$")
 ROW_V3 = re.compile(r"^(\s*)!(\s+)(.*)$")
+
+
+# NOT HANDLED: a whole contract on one line.
+#
+#   fn id(x: u32) -> u32 req true ens result == x fx pure { x }
+#
+# 373 sites across 83 files. Splitting on the clause words is safe, since they
+# are reserved and no identifier can be one — but reassembly has to restore the
+# inter-clause whitespace exactly, and many of these sit inside Rust string
+# literals that span physical lines with `\` continuations. An attempt at it
+# dropped the round-trip from 384/384 to 329/384, so it is left undone rather
+# than left wrong: a tool that provably restores what it touches and reports what
+# it does not is worth more than one that quietly mangles a corner.
 
 
 def _balance(text: str, depth: int) -> int:
@@ -97,7 +116,7 @@ def _lines_to_v3(lines: list[str]) -> list[str]:
     i = 0
     while i < len(lines):
         if not CLAUSE_V2.match(lines[i]):
-            out.append(lines[i])
+            out.append(TRAILING_INV_V2.sub(r"\1keeps\2", lines[i]))
             i += 1
             continue
 
@@ -128,7 +147,7 @@ def _lines_to_v2(lines: list[str]) -> list[str]:
     i = 0
     while i < len(lines):
         if not (CLAUSE_V3.match(lines[i]) or ROW_V3.match(lines[i])):
-            out.append(lines[i])
+            out.append(TRAILING_INV_V3.sub(r"\1inv\2", lines[i]))
             i += 1
             continue
 
@@ -241,7 +260,8 @@ def _rewrite_rust(text: str, to_v3_dir: bool) -> str:
         # is what separates a Thermite fragment from expected *lowered output* —
         # which also declares items, and which uses Verus's own `requires`.
         marker = r"(^|" + re.escape(sep) + r")\s*" + (r"fx\s" if to_v3_dir else r"!\s")
-        if not re.search(marker, body):
+        trailing = (TRAILING_INV_V2 if to_v3_dir else TRAILING_INV_V3).search(body)
+        if not re.search(marker, body) and not trailing:
             UNMIGRATED.append(body[:60].replace(sep, " ⏎ "))
             continue
         lines = body.split(sep)

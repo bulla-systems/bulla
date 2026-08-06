@@ -147,13 +147,48 @@ rename bucket rather than the rewrite one.
 
 Steps 1 and 2 are the change. Steps 4 through 6 are the volume.
 
-## What this cannot tell you
+## Spiked, and what it showed
 
-Whether the corpus still *certifies* after migration. That needs steps 1 and 2
-done together, because no front end accepts the new surface until the parser
-moves — which is why the migration and the parser change are one PR rather than
-two.
+Steps 1 and 2 were built as a throwaway branch to test the plan against reality
+rather than leave it as an estimate.
 
-The round-trip proof establishes that the rewrite loses nothing. It does not
-establish that the result means the same thing to the prover, and only
-re-certifying does.
+**The front-end change is 63 insertions and 62 deletions across five files** in
+`thermite-syntax` — lexer, parser, addresses, AST and lib. Four keyword renames;
+`fx` removed as a keyword entirely, since the row is `!` and `Bang` already
+lexed; the row moved to the head of `parse_contract`; clause names in diagnostics
+renamed to match.
+
+**And the migrated corpus certifies identically.** This is the check the
+round-trip explicitly cannot make:
+
+| file | baseline v2 | migrated v3 |
+|---|---|---|
+| `parse_u64.th` | 1 at L3 | 1 at L3 |
+| `list_sum.th` | 2 at L3 | 2 at L3 |
+| `option_result.th` | 5 at L3 | 5 at L3 |
+| `multi_adt.th` | 5 at L3 | 5 at L3 |
+| `map_kv.th` | 1 at L3 | 1 at L3 |
+| `bytes_eq_demo.th` | 4 at L3 | 4 at L3 |
+
+Eighteen items, same levels. The rename preserves meaning to the prover and not
+only information in the text.
+
+## What is still undone
+
+The spike is a spike. Four things remain before this is landable, and the first
+is the one that blocks the test suite:
+
+**Inline contracts.** `fn id(x: u32) -> u32 req true ens result == x fx pure { x }`
+— a whole contract on one line, 373 sites across 83 files. The migration tool
+does not handle them, and an attempt dropped its round-trip from 384/384 to
+329/384, so it was backed out rather than left wrong. Reassembly must restore
+inter-clause whitespace exactly, and many of these sit inside Rust string
+literals spanning physical lines with `\` continuations. This is the next piece
+of tool work.
+
+**Conjunct blocks**, **`requires nothing`**, and **one-or-more `requires`** are
+in the anchor and not in the spike. They add productions rather than rename
+tokens, so they are the part that is genuinely new.
+
+**516 clause-bearing literals** the tool declines to touch, reported for review.
+Most are expected Verus output and prose; some are genuine fragments.
