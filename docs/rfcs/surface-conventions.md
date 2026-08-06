@@ -636,6 +636,11 @@ the same way.
 
 ## Worked example
 
+Compact, and showing the conventions rather than the whole language.
+[Thermite 3](thermite-3.md) specifies the full surface, and
+[`docs/examples/thermite3-tour.th`](../examples/thermite3-tour.th) writes every
+construct out as one coherent subsystem.
+
 ```thermite
 opaque spec fn plan_ok(p: Plan) -> bool
   ensures   !result || p.count > 0

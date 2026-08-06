@@ -15,7 +15,7 @@ predicate over its leaves.
 Four items. Three are mechanical. One shares a root cause with
 [#122](https://github.com/dollspace-gay/Thermite/issues/122).
 
-## 1. A recursive `spec fn` has its `bool` return type rewritten to `nat`
+## 1. A `spec fn` over an ADT has its declared `bool` return rewritten to `nat`
 
 ```thermite
 enum Tree { Leaf(u64), Node(Box<Tree>, Box<Tree>) }
@@ -31,23 +31,57 @@ error[E0308]: mismatched types
 14 |     Tree::Leaf(v) => v < limit,
 ```
 
-The declared `-> bool` is discarded and `nat` emitted in its place. Isolated:
+The declared `-> bool` is discarded and `nat` emitted in its place.
 
-| | result |
-|---|---|
-| non-recursive, ADT measure, `-> bool` | L3 |
-| recursive, scalar measure, `-> bool` | L3 |
-| recursive, ADT measure, `-> u64` | L3 |
-| **recursive, ADT measure, `-> bool`** | **rewritten to `nat`** |
+**The trigger is a body shape, not recursion and not the measure.** An earlier
+draft of this report attributed it to "recursive spec functions" and proposed
+"stop assuming a measure return type" as the fix. Both are wrong, and a
+**non-recursive** function reproduces it:
 
-So the trigger is the combination, and the fix is to stop assuming a measure
-return type for recursive spec functions.
+```thermite
+spec fn depth(t: Tree) -> u64
+  dec t
+{ match t { Tree::Leaf(v) => 1, Tree::Node(l, r) => 1 + depth(*l) } }
 
-**Why this one matters most.** Structural induction yielding a predicate is how
-you state properties of trees. A page table is a four-level tree, and "this table
-maps no address outside the partition" is the property memory isolation actually
-rests on. This defect is the difference between a kernel that can only *build*
-address spaces and one that can *validate* them.
+spec fn calls_it(t: Tree) -> bool          // not recursive
+  dec t
+{ match t { Tree::Leaf(v) => true, Tree::Node(l, r) => depth(*l) > 0 } }
+```
+```
+20 | pub open spec fn calls_it(t: Tree) -> nat
+24 |             Tree::Leaf(v) => true,
+```
+
+`depth` certifies at L3. `calls_it` does not, and it calls itself nowhere.
+
+### The mechanism
+
+`is_adt_fold_sum` (`thermite-lower/src/lower.rs:4078`) classifies a body as a
+numeric fold when its tail is a `Match` and **any arm contains a call with a
+deref argument** — `f(*x)` — via `expr_has_deref_call_arg` (`:4096`). A body so
+classified joins the program-wide `nat_fns` set (`:891`) and is lowered with a
+`nat` return.
+
+The declared return type is not consulted anywhere in that path.
+
+The classifier was built for numeric folds, and its own comment says why the
+return is forced: the base arms "are coerced to `nat` uniformly with the
+recursive arm by the `nat` return". That is right for `sum_list` and wrong for
+any ADT match that happens to call through a `Box` deref.
+
+### The fix
+
+Gate the classification on the declared return type: a `spec fn` declared
+`-> bool` does not join `nat_fns`. The guard belongs at the `filter_map` building
+that set, where the item is in hand.
+
+### Why this one matters most
+
+Structural induction yielding a predicate is how you state properties of trees. A
+page table is a four-level tree, and "this table maps no address outside the
+partition" is the property memory isolation actually rests on. This defect is the
+difference between a kernel that can only *build* address spaces and one that can
+*validate* them.
 
 ## 2. `Vec` indexing in spec position emits an idiom the wrapper does not support
 
@@ -76,11 +110,37 @@ error[E0425]: cannot find function `forall_in` in this scope
 ```
 
 A struct invariant **can** call a user `spec fn` (verified: L3). Combinators are
-spec functions. Nothing semantic distinguishes them — the per-struct check
-harness simply does not weave the library in.
+spec functions. Nothing semantic distinguishes them.
 
-Same class as [#122](https://github.com/dollspace-gay/Thermite/issues/122), where
-the same harness does not weave type declarations.
+### The mechanism
+
+Combinator definitions are emitted on demand, from a walk that collects the names
+a program references. The driver (`thermite-lower/src/lower.rs:1783`) has an arm
+for a function's `req` and `ens`, an arm for its body's loop clauses, and an arm
+for a `spec fn`'s `dec` and body:
+
+```
+collect_combinators_in_expr(&f.contract.req.expr, …)
+collect_combinators_in_expr(&ens.expr, …)
+collect_combinators_in_block_specs(body, …)
+collect_combinators_in_expr(&s.dec.expr, …)
+collect_combinators_in_block_specs(&s.body, …)
+```
+
+There is **no arm for a struct or enum `inv`**. A combinator named there is never
+collected, so its definition is never emitted, so the reference does not resolve.
+
+The fix is an arm walking the `inv` expression.
+
+### Not the same defect as #122
+
+An earlier draft called this the same harness fault as
+[#122](https://github.com/dollspace-gay/Thermite/issues/122) and suggested filing
+it as a comment there. Checking the code, they are different paths with different
+fixes: #122 is `item_subprogram`'s ADT arm not weaving a declaration it depends
+on, in `forge/src/check.rs`; this is the combinator collection walk in
+`thermite-lower` having no ADT arm at all. They rhyme — the struct path fails to
+gather something it needs, twice — and they are not one bug.
 
 ## 4. A spec closure does not elaborate in value position
 
