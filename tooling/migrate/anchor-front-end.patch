@@ -1,0 +1,409 @@
+diff --git a/thermite-syntax/src/address.rs b/thermite-syntax/src/address.rs
+index 78136e3..c65185b 100644
+--- a/thermite-syntax/src/address.rs
++++ b/thermite-syntax/src/address.rs
+@@ -1,5 +1,5 @@
+ //! Thermite semantic addressing — stable, positional block addresses computed
+-//! over the AST (`binary_search.loop#1.inv#2`).
++//! over the AST (`binary_search.loop#1.keeps#2`).
+ //!
+ //! Governing design: `.design/syntax/semantic-addressing.md`. Addresses are the
+ //! operands of `forge edit <addr>` and the keys of the per-item proof cache
+@@ -8,7 +8,7 @@
+ //! `while` and `loop` share the `loop#N` namespace (REQ-2). Resolution is
+ //! bidirectional and never panics: a bad address yields a structured
+ //! `AddressError` (REQ-6). Blocker #26 is resolved by the oracle: 1-based source
+-//! order, all invariants counted (`inv#2` = `forall_below`, `inv#3` =
++//! order, all invariants counted (`keeps#2` = `forall_below`, `keeps#3` =
+ //! `forall_from`).
+ //!
+ //! ## REQ status
+@@ -65,11 +65,11 @@ pub enum AddrKind {
+     Hole,
+     /// A Stage-1 forge-tier item root or proof obligation
+     /// (`.design/stage1-forge-tier.md` REQ-3): a `prop fn`/`lemma` name, a numbered
+-    /// `witness#N`, or a proof obligation `f.proof.ens#k`. The consumers (proof view
++    /// `witness#N`, or a proof obligation `f.proof.ensures#k`. The consumers (proof view
+     /// 2e, lemma library 3) resolve these; here they are addressable + round-trip.
+     Forge,
+     /// An open proof hole `?pN` (`.design/stage1-forge-tier.md` REQ-3) inside a
+-    /// proof block. Addressed `<lemma>.proof.?pN` / `f.proof.ens#k.?pN`. Distinct
++    /// proof block. Addressed `<lemma>.proof.?pN` / `f.proof.ensures#k.?pN`. Distinct
+     /// from a body [`AddrKind::Hole`]: `forge fill` targeting a proof hole is the
+     /// proof view (increment 2e, REQ-7), so for now this is addressable + round-trip
+     /// only (the body-hole `forge fill` path rejects it as "not a body hole").
+@@ -147,7 +147,7 @@ pub fn addresses_of(program: &Program) -> Vec<AddressEntry> {
+             Item::Struct(_) | Item::Enum(_) => {}
+             // Stage-1 forge-tier items (`.design/stage1-forge-tier.md` REQ-3): the
+             // prop/lemma/proof/witness addressing, including the proof-block
+-            // addresses (`f.proof.ens#k`) and the `?pN` proof-hole form (AC-7).
++            // addresses (`f.proof.ensures#k`) and the `?pN` proof-hole form (AC-7).
+             Item::Forge(forge) => collect_forge_addresses(forge, &mut witness_index, &mut out),
+         }
+     }
+@@ -156,7 +156,7 @@ pub fn addresses_of(program: &Program) -> Vec<AddressEntry> {
+ 
+ /// Collect the addresses of a Stage-1 forge-tier item
+ /// (`.design/stage1-forge-tier.md` REQ-3): the item root, the proof-block
+-/// obligation addresses (`f.proof.ens#k`), and the `?pN` proof-hole addresses.
++/// obligation addresses (`f.proof.ensures#k`), and the `?pN` proof-hole addresses.
+ /// `witness_index` is the running 1-based witness counter (witnesses are anonymous,
+ /// so numbered `witness#N`).
+ fn collect_forge_addresses(
+@@ -196,7 +196,7 @@ fn collect_forge_addresses(
+             }
+         }
+         ForgeItem::Proof(p) => {
+-            // Each obligation is addressed `f.proof.<clause>` (e.g. `f.proof.ens#k`);
++            // Each obligation is addressed `f.proof.<clause>` (e.g. `f.proof.ensures#k`);
+             // its proof block's open holes are `f.proof.<clause>.?pN`.
+             for ob in &p.obligations {
+                 let clause_addr = match ob.clause.index {
+@@ -265,7 +265,7 @@ fn collect_in_block(
+     }
+ }
+ 
+-/// Emit the loop's own address plus its `inv#M` (1-based, source order) and
++/// Emit the loop's own address plus its `keeps#M` (1-based, source order) and
+ /// `dec` addresses (semantic-addressing.md REQ-3/REQ-4).
+ fn emit_loop(loop_addr: &str, lp: &LoopNode, out: &mut Vec<AddressEntry>) {
+     out.push(AddressEntry {
+@@ -276,7 +276,7 @@ fn emit_loop(loop_addr: &str, lp: &LoopNode, out: &mut Vec<AddressEntry>) {
+     });
+     for (m, inv) in lp.invs.iter().enumerate() {
+         out.push(AddressEntry {
+-            addr: format!("{loop_addr}.inv#{}", m + 1),
++            addr: format!("{loop_addr}.keeps#{}", m + 1),
+             kind: AddrKind::Inv,
+             surface_keyword: None,
+             text: Some(inv.text.clone()),
+@@ -305,7 +305,7 @@ pub fn resolve(program: &Program, addr: &str) -> Result<AddressEntry, AddressErr
+         .ok_or_else(|| AddressError::NotFound(addr.to_string()))
+ }
+ 
+-/// Check that every segment after the root is a well-formed `loop#N`/`inv#M`/
++/// Check that every segment after the root is a well-formed `loop#N`/`keeps#M`/
+ /// `dec` (REQ-1) or a forge-tier segment — `proof`, a clause family `ens`/`req`/
+ /// `inv` (optionally `#k`), or a proof hole `?pN` (`.design/stage1-forge-tier.md`
+ /// REQ-3). The root is a non-empty identifier (a fn/prop/lemma name) or the
+@@ -328,7 +328,7 @@ fn validate_segments(addr: &str) -> Result<(), AddressError> {
+     for seg in segs {
+         // Bare keyword segments: the loop `dec`, the proof-block `proof`, and an
+         // unindexed clause family (`f.proof.req`).
+-        if matches!(seg, "dec" | "proof" | "ens" | "req" | "inv") {
++        if matches!(seg, "measures" | "proof" | "ensures" | "requires" | "keeps") {
+             continue;
+         }
+         // A hole segment — a body hole `?N` (#193) or a proof hole `?pN`
+@@ -342,9 +342,9 @@ fn validate_segments(addr: &str) -> Result<(), AddressError> {
+             continue;
+         }
+         // A numbered segment `<word>#<digits>`: a loop/inv ordinal (#193 addressing)
+-        // or a forge-tier clause ordinal `ens#k`/`req#k`/`inv#k` (REQ-3).
++        // or a forge-tier clause ordinal `ensures#k`/`requires#k`/`keeps#k` (REQ-3).
+         if let Some((word, num)) = seg.split_once('#') {
+-            if !matches!(word, "loop" | "inv" | "ens" | "req") || !all_digits(num) {
++            if !matches!(word, "loop" | "keeps" | "ensures" | "requires") || !all_digits(num) {
+                 return Err(AddressError::Malformed(addr.to_string()));
+             }
+             continue;
+diff --git a/thermite-syntax/src/ast.rs b/thermite-syntax/src/ast.rs
+index 0a4c966..d5cb28a 100644
+--- a/thermite-syntax/src/ast.rs
++++ b/thermite-syntax/src/ast.rs
+@@ -213,8 +213,8 @@ pub enum ForgeItem {
+     /// `lemma NAME(params) req … ens … proof { … }` — a named lemma carrying a
+     /// req/ens statement and a proof block.
+     Lemma(LemmaItem),
+-    /// `proof for f { ens#k by { … } }` — a proof item discharging specific
+-    /// contract clauses (`ens#k`) of an existing function `f`.
++    /// `proof for f { ensures#k by { … } }` — a proof item discharging specific
++    /// contract clauses (`ensures#k`) of an existing function `f`.
+     Proof(ProofItem),
+     /// `witness { inhabit (…); falsify N; }` — a covenant witness block (the
+     /// covenant logic is increment 2b; here parsed + represented only).
+@@ -268,12 +268,12 @@ pub struct LemmaItem {
+     pub span: Span,
+ }
+ 
+-/// A `proof for f { ens#k by { … } }` item (`.design/stage1-forge-tier.md`
++/// A `proof for f { ensures#k by { … } }` item (`.design/stage1-forge-tier.md`
+ /// REQ-3). A proof item discharges one or more specific contract clauses of an
+-/// existing function `target` (`f`), each named by a [`ClauseSelector`] (`ens#k`)
++/// existing function `target` (`f`), each named by a [`ClauseSelector`] (`ensures#k`)
+ /// and proved by a `by { … }` proof block. The clauses are resolved against `f`'s
+ /// contract by the proof view (increment 2e, REQ-7); here the surface is parsed
+-/// and addressed (`f.proof.ens#k`) only.
++/// and addressed (`f.proof.ensures#k`) only.
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct ProofItem {
+     /// The target function name `f` (the `proof for f` head). The address root.
+@@ -283,7 +283,7 @@ pub struct ProofItem {
+ }
+ 
+ /// One `clause by { … }` obligation inside a [`ProofItem`]
+-/// (`.design/stage1-forge-tier.md` REQ-3): a [`ClauseSelector`] (`ens#k`) plus the
++/// (`.design/stage1-forge-tier.md` REQ-3): a [`ClauseSelector`] (`ensures#k`) plus the
+ /// proof block discharging it.
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct ProofObligation {
+@@ -292,10 +292,10 @@ pub struct ProofObligation {
+     pub span: Span,
+ }
+ 
+-/// A reference to a specific contract clause of a function, e.g. `ens#k`
++/// A reference to a specific contract clause of a function, e.g. `ensures#k`
+ /// (`.design/stage1-forge-tier.md` REQ-3). `keyword` is the clause family
+ /// (`"ens"`/`"req"`/`"inv"`); `index` is the `#k` ordinal, or `None` for an
+-/// unindexed family (`req`). The surface spelling of the `f.proof.ens#k` address.
++/// unindexed family (`req`). The surface spelling of the `f.proof.ensures#k` address.
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct ClauseSelector {
+     pub keyword: Ident,
+diff --git a/thermite-syntax/src/lexer.rs b/thermite-syntax/src/lexer.rs
+index 0890635..8d06289 100644
+--- a/thermite-syntax/src/lexer.rs
++++ b/thermite-syntax/src/lexer.rs
+@@ -142,8 +142,8 @@ pub enum TokKind {
+     // Attribute introducer `#[`.
+     HashBracket,
+     /// A bare `#` (`.design/stage1-forge-tier.md` REQ-3): the clause-ordinal
+-    /// separator in a forge-tier proof obligation `ens#k` (the surface spelling of
+-    /// the `ens#k` semantic address). Distinct from `HashBracket` (`#[`) by maximal
++    /// separator in a forge-tier proof obligation `ensures#k` (the surface spelling of
++    /// the `ensures#k` semantic address). Distinct from `HashBracket` (`#[`) by maximal
+     /// munch — `#[` wins when a `[` follows, else a `#` lexes to this. Outside a
+     /// proof item the parser never expects it, so a stray `#` surfaces as a normal
+     /// unexpected-token error.
+@@ -221,11 +221,10 @@ fn keyword_kind(word: &str) -> Option<TokKind> {
+     Some(match word {
+         "fn" => TokKind::Fn,
+         "spec" => TokKind::Spec,
+-        "req" => TokKind::Req,
+-        "ens" => TokKind::Ens,
+-        "fx" => TokKind::Fx,
+-        "inv" => TokKind::Inv,
+-        "dec" => TokKind::Dec,
++        "requires" => TokKind::Req,
++        "ensures" => TokKind::Ens,
++        "keeps" => TokKind::Inv,
++        "measures" => TokKind::Dec,
+         "pure" => TokKind::Pure,
+         "let" => TokKind::Let,
+         "mut" => TokKind::Mut,
+@@ -273,7 +272,7 @@ pub fn tokenize(src: &str) -> (Vec<Token>, Vec<SyntaxError>) {
+             i += 2;
+         } else if c == b'#' {
+             // A bare `#` — the clause-ordinal separator in a proof obligation
+-            // `ens#k` (forge-tier REQ-3). `#[` is handled above (maximal munch),
++            // `ensures#k` (forge-tier REQ-3). `#[` is handled above (maximal munch),
+             // so this arm fires only when no `[` follows.
+             tokens.push(Token {
+                 kind: TokKind::Hash,
+diff --git a/thermite-syntax/src/lib.rs b/thermite-syntax/src/lib.rs
+index 935e389..0ceaf41 100644
+--- a/thermite-syntax/src/lib.rs
++++ b/thermite-syntax/src/lib.rs
+@@ -1,5 +1,5 @@
+ //! `thermite-syntax` — the Thermite surface-syntax foundation: lexer, recovering
+-//! parser, AST, and stable semantic addressing (`loop#1.inv#2`).
++//! parser, AST, and stable semantic addressing (`loop#1.keeps#2`).
+ //!
+ //! This is the leaf crate of the v0.1 kernel DAG (workspace REQ-2): it has no
+ //! intra-workspace dependencies. The four modules below are the executable form
+diff --git a/thermite-syntax/src/parser.rs b/thermite-syntax/src/parser.rs
+index 47d304c..a76f6f9 100644
+--- a/thermite-syntax/src/parser.rs
++++ b/thermite-syntax/src/parser.rs
+@@ -954,7 +954,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Dec) {
+             return Err(SyntaxError::MissingClause {
+                 item: name,
+-                clause: "dec".to_string(),
++                clause: "measures".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -1125,7 +1125,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Req) {
+             return Err(SyntaxError::MissingClause {
+                 item: name.clone(),
+-                clause: "req".to_string(),
++                clause: "requires".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -1134,7 +1134,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Ens) {
+             return Err(SyntaxError::MissingClause {
+                 item: name.clone(),
+-                clause: "ens".to_string(),
++                clause: "ensures".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -1159,10 +1159,10 @@ impl<'a> Parser<'a> {
+     }
+ 
+     /// Parse a `proof for f { clause by { … } … }` item (REQ-3): a proof discharging
+-    /// specific contract clauses (`ens#k`) of an existing function `f`. Each
++    /// specific contract clauses (`ensures#k`) of an existing function `f`. Each
+     /// obligation is a [`ClauseSelector`] + a `by { … }` proof block (with `?pN`
+     /// proof holes). The clauses are resolved against `f` by the proof view
+-    /// (increment 2e); here they are parsed + addressed (`f.proof.ens#k`).
++    /// (increment 2e); here they are parsed + addressed (`f.proof.ensures#k`).
+     fn parse_proof_item(&mut self, start_span: Span) -> PResult<ProofItem> {
+         self.expect_contextual("proof")?;
+         self.expect_contextual("for")?;
+@@ -1192,7 +1192,7 @@ impl<'a> Parser<'a> {
+         })
+     }
+ 
+-    /// Parse a clause selector `ens#k` / `req` / `inv#k` (REQ-3): the clause family
++    /// Parse a clause selector `ensures#k` / `req` / `keeps#k` (REQ-3): the clause family
+     /// keyword (a reserved keyword, accepted by kind) plus an optional `#k` ordinal.
+     fn parse_clause_selector(&mut self) -> PResult<ClauseSelector> {
+         let keyword = if self.eat(&TokKind::Ens) {
+@@ -1420,20 +1420,29 @@ impl<'a> Parser<'a> {
+     /// Parse the mandatory contract `req` then `ens`+ then `fx`, in that exact
+     /// order (parser.md REQ-2). Absence or misorder is a `SyntaxError`.
+     fn parse_contract(&mut self, fn_name: &str) -> PResult<Contract> {
+-        // `req` — exactly one, first.
++        // Thermite 3 order: the effect row first — it is part of the type —
++        // then `requires`, then `ensures`+.
++        if !self.check(&TokKind::Bang) {
++            return Err(SyntaxError::MissingClause {
++                item: fn_name.to_string(),
++                clause: "!".to_string(),
++                span: self.peek_span(),
++            });
++        }
++        let fx = self.parse_effect_row()?;
++
++        // `requires` — exactly one, after the row.
+         if !self.check(&TokKind::Req) {
+-            // If `ens`/`fx` appear first, that is an order error; otherwise the
+-            // clause is simply absent.
+-            if matches!(self.peek(), TokKind::Ens | TokKind::Fx) {
++            if matches!(self.peek(), TokKind::Ens) {
+                 return Err(SyntaxError::ClauseOrder {
+                     item: fn_name.to_string(),
+-                    clause: "req".to_string(),
++                    clause: "requires".to_string(),
+                     span: self.peek_span(),
+                 });
+             }
+             return Err(SyntaxError::MissingClause {
+                 item: fn_name.to_string(),
+-                clause: "req".to_string(),
++                clause: "requires".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -1443,7 +1452,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Ens) {
+             return Err(SyntaxError::MissingClause {
+                 item: fn_name.to_string(),
+-                clause: "ens".to_string(),
++                clause: "ensures".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -1456,21 +1465,11 @@ impl<'a> Parser<'a> {
+         if self.check(&TokKind::Req) {
+             return Err(SyntaxError::ClauseOrder {
+                 item: fn_name.to_string(),
+-                clause: "req".to_string(),
++                clause: "requires".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+ 
+-        // `fx` — exactly one, last.
+-        if !self.check(&TokKind::Fx) {
+-            return Err(SyntaxError::MissingClause {
+-                item: fn_name.to_string(),
+-                clause: "fx".to_string(),
+-                span: self.peek_span(),
+-            });
+-        }
+-        let fx = self.parse_effect_row()?;
+-
+         Ok(Contract { req, ens, fx })
+     }
+ 
+@@ -1662,7 +1661,10 @@ impl<'a> Parser<'a> {
+     }
+ 
+     fn parse_effect_row(&mut self) -> PResult<EffectRow> {
+-        self.consume(&TokKind::Fx, "`fx`")?;
++        // Thermite 3: the row is marked `!` and belongs to the arrow rather than
++        // to the predicates. `Bang` is unambiguous here — a clause line never
++        // opens with one (checked across the corpus: 144 rows, 0 others).
++        self.consume(&TokKind::Bang, "`!`")?;
+         if self.eat(&TokKind::Pure) {
+             return Ok(EffectRow::Pure);
+         }
+@@ -1993,7 +1995,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Inv) {
+             return Err(SyntaxError::MissingClause {
+                 item: "for".to_string(),
+-                clause: "inv".to_string(),
++                clause: "keeps".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -2164,7 +2166,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Inv) {
+             return Err(SyntaxError::MissingClause {
+                 item: "while".to_string(),
+-                clause: "inv".to_string(),
++                clause: "keeps".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -2176,7 +2178,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Dec) {
+             return Err(SyntaxError::MissingClause {
+                 item: "while".to_string(),
+-                clause: "dec".to_string(),
++                clause: "measures".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -2335,7 +2337,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Inv) {
+             return Err(SyntaxError::MissingClause {
+                 item: "loop".to_string(),
+-                clause: "inv".to_string(),
++                clause: "keeps".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -2348,7 +2350,7 @@ impl<'a> Parser<'a> {
+         if !self.check(&TokKind::Dec) {
+             return Err(SyntaxError::MissingClause {
+                 item: "loop".to_string(),
+-                clause: "dec".to_string(),
++                clause: "measures".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -2357,7 +2359,7 @@ impl<'a> Parser<'a> {
+             // A second `dec` violates the exactly-one cardinality.
+             return Err(SyntaxError::ClauseOrder {
+                 item: "loop".to_string(),
+-                clause: "dec".to_string(),
++                clause: "measures".to_string(),
+                 span: self.peek_span(),
+             });
+         }
+@@ -3400,7 +3402,7 @@ fn token_text(kind: &TokKind) -> &'static str {
+         TokKind::Spec => "spec",
+         TokKind::Req => "req",
+         TokKind::Ens => "ens",
+-        TokKind::Fx => "fx",
++        TokKind::Fx => "!",
+         TokKind::Inv => "inv",
+         TokKind::Dec => "dec",
+         TokKind::Pure => "pure",
