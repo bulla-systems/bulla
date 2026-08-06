@@ -14,7 +14,7 @@ currently in that state.
 
 | document | rung | proposes | kind |
 |---|---|---|---|
-| [Thermite 3](thermite-3.md) | — | the sequencing: what lands in what order, and the syntax-only anchor | **meta** |
+| [Thermite 3](thermite-3.md) | all | the surface in full, each construct marked by when it lands, plus the rollout | **specification** |
 | [full words](full-words-anchor.md) | — | the anchor itself: rename and reorder, no new expressive power | **proposal** |
 | [surface conventions](surface-conventions.md) | all | the clause grammar and surface every other document assumes | **cross-cutting** |
 | [the effect algebra](effect-algebra.md) | all | what an effect *is*: a theory, a basis, and the criterion for admitting one | **cross-cutting** |
