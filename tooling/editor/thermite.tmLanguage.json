@@ -1,0 +1,180 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Thermite",
+  "scopeName": "source.thermite",
+  "fileTypes": ["th"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#clauses" },
+    { "include": "#effect-row" },
+    { "include": "#items" },
+    { "include": "#modifiers" },
+    { "include": "#control" },
+    { "include": "#hints" },
+    { "include": "#constants" },
+    { "include": "#types" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#attributes" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.thermite",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.thermite",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+
+    "clauses": {
+      "comment": "Every clause is a third-person-singular verb whose subject is the item. These carry the language's meaning and get the strongest scope.",
+      "patterns": [
+        {
+          "name": "keyword.control.clause.thermite",
+          "match": "\\b(requires|ensures|survives|measures|keeps|asks|promises)\\b"
+        },
+        {
+          "name": "keyword.control.clause.legacy.thermite",
+          "comment": "Thermite 2 spellings, so a migrating file still reads",
+          "match": "\\b(req|ens|inv|dec|fx)\\b"
+        },
+        {
+          "name": "constant.language.trivial.thermite",
+          "match": "\\bnothing\\b"
+        }
+      ]
+    },
+
+    "effect-row": {
+      "patterns": [
+        {
+          "name": "keyword.other.effect-row.thermite",
+          "comment": "the row marker: type-level, not a predicate",
+          "match": "^\\s*!"
+        },
+        {
+          "name": "keyword.other.effect.thermite",
+          "comment": "bare atoms",
+          "match": "\\b(pure|panic|diverge|blocks|random|alloc|time|rand|term|irq|masked)\\b"
+        },
+        {
+          "name": "keyword.other.effect.thermite",
+          "comment": "parameterised atoms, only where applied",
+          "match": "\\b(read|write|owns|forgets|accrues|cost|net|platform|state|io|exception|partiality)(?=\\()"
+        }
+      ]
+    },
+
+    "items": {
+      "patterns": [
+        {
+          "name": "keyword.other.item.thermite",
+          "match": "\\b(fn|spec|struct|enum|protocol|effect|operation|law|shared|lock|handlers)\\b"
+        },
+        {
+          "name": "keyword.other.block.thermite",
+          "match": "\\b(interleaves|holding|picks)\\b"
+        },
+        {
+          "name": "keyword.other.connective.thermite",
+          "comment": "declaration connectives: lock X guards T after Y; handlers { h at 1 }; protocol ... end / repeat",
+          "match": "\\b(guards|after|at|end|repeat)\\b"
+        }
+      ]
+    },
+
+    "modifiers": {
+      "name": "storage.modifier.thermite",
+      "match": "\\b(opaque|resource|pub|mut)\\b"
+    },
+
+    "control": {
+      "patterns": [
+        {
+          "name": "keyword.control.thermite",
+          "match": "\\b(if|else|match|loop|while|return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.other.thermite",
+          "match": "\\b(let|as|is|forall|exists)\\b"
+        }
+      ]
+    },
+
+    "hints": {
+      "name": "support.function.hint.thermite",
+      "comment": "proof hints attach to an obligation: `ensures P by unfold(f)`",
+      "match": "\\b(by|unfold)\\b"
+    },
+
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.thermite",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "variable.language.thermite",
+          "match": "\\b(result|final|self|forget)\\b"
+        }
+      ]
+    },
+
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.thermite",
+          "match": "\\b(u8|u16|u32|u64|usize|i8|i16|i32|i64|isize|bool|char|nat|int)\\b"
+        },
+        {
+          "name": "support.type.builtin.thermite",
+          "match": "\\b(Vec|Map|Set|Multiset|Seq|Result|Option|String|Box)\\b"
+        },
+        {
+          "name": "entity.name.type.endpoint.thermite",
+          "comment": "an endpoint is a path to a protocol role: PageRequest::Provider",
+          "match": "\\b[A-Z]\\w*::[A-Z]\\w*\\b"
+        },
+        {
+          "name": "entity.name.type.thermite",
+          "match": "\\b[A-Z]\\w*\\b"
+        }
+      ]
+    },
+
+    "strings": {
+      "name": "string.quoted.double.thermite",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.thermite", "match": "\\\\." }
+      ]
+    },
+
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.hex.thermite", "match": "\\b0x[0-9a-fA-F]+\\b" },
+        { "name": "constant.numeric.thermite", "match": "\\b[0-9][0-9_]*\\b" }
+      ]
+    },
+
+    "attributes": {
+      "name": "meta.attribute.thermite",
+      "match": "#\\[[^\\]]*\\]"
+    },
+
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.arrow.thermite", "match": "->|=>" },
+        { "name": "keyword.operator.thermite", "match": "==|!=|<=|>=|&&|\\|\\||>>|<<|[-+*/%<>=&|^!]" }
+      ]
+    }
+  }
+}
