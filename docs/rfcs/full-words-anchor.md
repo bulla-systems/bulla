@@ -188,6 +188,18 @@ because a later proposal turns them into `write(heap)` and `write(entropy)`
 anyway, and renaming the same token twice is churn. Flagged so it reads as a
 decision rather than an oversight.
 
+## Implementing it
+
+[A measured work plan](anchor-implementation.md) scopes it against the tree: the
+compiler change is five keyword entries, five token variants, one ordering
+change in `parse_contract`, and two lines in the address allowlist. The volume is
+elsewhere — 619 clause lines embedded in 66 Rust test files, which the migration
+tool does not reach because they live inside string literals.
+
+The migration and the parser change are **one PR rather than two**, because no
+front end accepts the new surface until the parser moves, so a migrated corpus
+cannot certify on its own.
+
 ## What it asks
 
 A review and a CI run. The corpus certifies before and after, the migration is a
