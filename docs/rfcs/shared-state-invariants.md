@@ -152,16 +152,54 @@ Concurrent separation logic (O'Hearn and Brookes, 2004). Mechanised repeatedly,
 and the pinned Verus ships `vstd/invariant.rs` and `vstd/rwlock.rs`, so the
 substrate is present.
 
-## Open questions
+## Ordering: locks carry a rank
+
+`owns(a), owns(b)` in one function and `owns(b), owns(a)` in another deadlocks,
+and today both typecheck. Requiring `holding` blocks makes the acquisition order
+*stated*; a rank makes it *checked*.
+
+```thermite
+lock sched_lock guards SchedState at 1;
+lock frame_lock guards FrameTable at 2;
+```
+
+**Nesting requires a strictly increasing rank**, and because a `holding` block is
+lexical the check is a comparison over the block nesting rather than an analysis:
+
+```thermite
+holding sched_lock { holding frame_lock { … } }     // 1 then 2 — accepted
+holding frame_lock { holding sched_lock { … } }     // 2 then 1 — rejected
+```
+
+Equal ranks may not be nested at all, which is what makes the rank an order
+rather than a hint. A total rank is stricter than the partial order that would
+suffice — it forbids some safe programs — and it is sound, costs one integer per
+lock, and reduces the check to a comparison. Declaration order would be cheaper
+still and is rejected: reordering two declarations would silently change which
+programs are legal.
+
+**A lock a handler takes needs masking, not just ranking.** This is the classic
+defect a rank alone does not catch. If a handler carries `owns(r)`, then
+normal-context code holding `r` deadlocks against it on its own CPU — the handler
+fires, waits for a lock, and the code that would release it has been preempted
+and will not resume until the handler returns. So:
+
+> if any function in `handlers { }` carries `owns(r)`, every normal-context
+> function carrying `owns(r)` must also carry `owns(interrupts)`
+
+Checkable from the rows and the handler declaration, and it is among the most
+common concurrency defects in real kernels.
+
+**This is not the order the effect-rows document wants.** That one needs a
+*containment* order — a tree derived from the type structure, so
+`write(scheduler)` conflicts with `read(scheduler.runqueue)` — and it is used by
+the conflict rule. This one is a declared rank used by the deadlock check. Both
+documents previously deferred to each other as though there were a single order
+to specify.
+
+## Open question
 
 - **Reentrancy.** Does holding `owns(r)` permit calling something that also wants
   `owns(r)`? The answer is no, and because a `holding` block is lexical this is
   checkable by containment rather than by dataflow: no call inside a `holding r`
   block may reach a function whose row carries `owns(r)`.
-- **Ordering.** `owns(a), owns(b)` in one function and `owns(b), owns(a)` in
-  another deadlocks, and today both typecheck. Requiring blocks makes the order
-  *stated*; it does not yet make it *checked*. Checking it needs a region partial
-  order,
-  which the effect-rows RFC also wants, and one order would close both at once.
-  What this document contributes is that the order is now written down somewhere
-  a checker could read.

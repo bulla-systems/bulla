@@ -214,21 +214,41 @@ fn timer_isr() -> ()
 with `irq` functions conflicting with non-`irq` functions over the same region
 unless the latter masks interrupts — itself an effect, `masked`.
 
-## Open question to settle before implementation
+## Granularity: the containment order
 
-**Granularity.** One region per subsystem serialises things that need not be.
-Sub-regions (`shared scheduler.runqueue: ...`) would help, but the conflict rule
-then needs a containment order: `write(scheduler)` must conflict with
-`read(scheduler.runqueue)`.
+One region per subsystem serialises things that need not be. Sub-regions fix it,
+and the conflict rule then needs a **containment order**, because
+`write(scheduler)` must conflict with `read(scheduler.runqueue)`.
 
-Tractable — it is a tree, and conflict is ancestry — but it is the difference
-between a weekend and a fortnight, and retrofitting it is worse than deciding it.
+**Containment follows the type, so it needs no new declaration.** If
+`SchedState` has a field `runqueue`, then `scheduler.runqueue` is a sub-region of
+`scheduler`. The region tree is the field tree, and conflict is ancestry:
 
-The heap makes this concrete rather than theoretical. Once `alloc` is
-`write(heap)`, every allocating function conflicts with every other, so
-allocation serialises. That is correct for a single global allocator and it is
-currently invisible; the fix is per-CPU heaps as separate regions, which is the
-granularity question with a specific answer.
+| | |
+|---|---|
+| `write(scheduler)` ∥ `read(scheduler.runqueue)` | reject — one contains the other |
+| `write(scheduler.runqueue)` ∥ `write(scheduler.timers)` | **accept** — siblings are disjoint |
+| `write(scheduler.runqueue)` ∥ `read(scheduler.runqueue)` | reject — same region |
+
+So the rule is: two atoms conflict when their regions are equal or one is an
+ancestor of the other, and the existing read/write table applies unchanged at
+each pair.
+
+The heap makes this concrete. Once `alloc` is `write(heap)`, every allocating
+function conflicts with every other, so allocation serialises — correct for a
+single global allocator, and currently invisible. Per-CPU heaps as sibling
+sub-regions is the fix, and it is the containment order doing the work.
+
+**Blocked on [G4](../language-gaps.md#g4-struct-fields-of-user-declared-types)**,
+since a declared type cannot be a field of another declared type today, so a
+region cannot have structured sub-regions to name.
+
+**This is not the order the shared-state document wants.** That one needs an
+*acquisition* order — which lock may be taken while holding another — and the two
+are different relations on the same set. Containment is a tree derived from
+types and used by the conflict rule; acquisition is a declared rank used by the
+deadlock check. Both documents previously deferred to each other about "the
+region partial order" as though it were one thing.
 
 ## Metatheory
 
