@@ -12,8 +12,7 @@ push to it; you cannot say anything about its contents in `req`, `ens`, or `inv`
 You can define a recursive tree and compute its depth in spec; you cannot state a
 predicate over its leaves.
 
-Four items. Three are mechanical. One shares a root cause with
-[#122](https://github.com/dollspace-gay/Thermite/issues/122).
+Three items, each with a located fix in a different file.
 
 ## 1. A `spec fn` over an ADT has its declared `bool` return rewritten to `nat`
 
@@ -83,24 +82,56 @@ partition" is the property memory isolation actually rests on. This defect is th
 difference between a kernel that can only *build* address spaces and one that can
 *validate* them.
 
-## 2. `Vec` indexing in spec position emits an idiom the wrapper does not support
+## 2. The bounded `Vec` wrapper has no `View`, so spec positions needing a `Seq` fail
+
+Two symptoms, one cause.
+
+**Indexing:**
 
 ```thermite
 fn f(xs: Vec<u64>) -> u64 req xs.len() > 0 ens result == xs[0] fx alloc { xs[0] }
 ```
 ```
-error[E0599]: no method named `view` found for struct `TVecU64`
-   | ... xs@[i as int] ...
+error[E0599]: no method named `view` found for struct `TVecU64` in the current scope
+  = note: the following traits define an item `view`, perhaps you need to implement one of them
 ```
 
-The emitter writes `xs@` — Verus's view operator — but the generated `TVecU64`
-wrapper does not implement `View`.
+**A combinator over the same value:**
 
-**The wrapper already emits `spec_get`.** So the capability exists and the
-emitter is reaching for the wrong idiom; emitting `spec_get` is the minimal fix,
-implementing `View` the more general one.
+```thermite
+fn g(xs: Vec<u32>, n: u32) -> bool
+  req true
+  ens result == forall_in(xs, |x| x != n)
+  fx  alloc
+{ true }
+```
+```
+error[E0308]: mismatched types
+   |                   --------- ^^ expected `Seq<u32>`, found `TVecU32`
+```
 
-## 3. Combinators are not in scope inside an `inv` clause
+The emitter reaches for `xs@`, Verus's view operator, and the generated wrapper
+does not implement `View`. A combinator in value position wants a `Seq` and gets
+the wrapper for the same reason.
+
+> **Corrected 2026-08-05.** These were filed as two items, the second described as
+> "a spec closure does not elaborate in value position" with an error reading
+> `expected FnSpec<(u32,), bool>, found closure`. Re-running it gives the error
+> above: the closure is not the problem, the receiver is. One defect, two
+> symptoms.
+
+**The capability already exists.** The wrapper emits `spec_get`
+(`thermite-lower/src/lower.rs:5100`):
+
+```rust
+"    pub open spec fn spec_get(&self, i: int) -> {ety} {{ self.data@[i] }}"
+```
+
+So the minimal fix is to emit `spec_get`-based forms rather than `@`, and the
+general one is to implement `View` for the wrapper, which serves both symptoms at
+once.
+
+## 3. Combinators are not collected from a struct `inv`
 
 ```thermite
 struct S { xs: Vec<u32> } inv forall_in(xs, |x| x < 100)
@@ -141,19 +172,6 @@ fixes: #122 is `item_subprogram`'s ADT arm not weaving a declaration it depends
 on, in `forge/src/check.rs`; this is the combinator collection walk in
 `thermite-lower` having no ADT arm at all. They rhyme — the struct path fails to
 gather something it needs, twice — and they are not one bug.
-
-## 4. A spec closure does not elaborate in value position
-
-```thermite
-ens result == forall_in(xs, |x| x != n)
-```
-```
-error[E0308]: expected `FnSpec<(u32,), bool>`, found closure
-```
-
-Value position itself is fine — `ens result == user_spec_fn(a)` reaches L3, and
-`forall_in` works in `req` and in `ens` proposition position. The obstacle is
-closure elaboration in that context alone.
 
 ## Why it survives
 
