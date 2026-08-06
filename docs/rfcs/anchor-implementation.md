@@ -19,29 +19,41 @@ place and almost all of the *volume* is in another:
 | address-allowlist lines | **2** |
 | clause names appearing as error strings | several, in `parser.rs` |
 | `.th` corpus files | **65** — the migration tool rewrites these |
-| Rust files **embedding** clause source | **66**, carrying **619** clause lines |
-| Rust files only mentioning the words | 155 — likely untouched |
+| Rust files embedding `.th` source in string literals | **114**, carrying **762** clause lines |
+| address strings to rename (`ens#k` → `ensures#k`) | **114**, across 27 files |
+| clause words in doc-comment prose | 2,149 — judgement, not mechanism |
 | golden/oracle directories | 22 |
 | design docs mentioning the clauses | 52 |
 
-**The compiler change is small and the test corpus is the schedule.** 619
-embedded clause lines across 66 Rust files is the number to plan around, and
-`thermite-migrate.py` does not reach them, because they live inside string
-literals rather than in `.th` files.
+**The compiler change is small and the test corpus is the schedule.** The number
+to plan around is 762 clause lines in string literals across 114 Rust files:
+`thermite-migrate.py` does not reach them, because they are not `.th` files.
+
+A first count lumped three different treatments together and overstated the
+mechanical work. They are distinct:
+
+| | treatment |
+|---|---|
+| `.th` source in string literals | the string-literal variant of the migration tool |
+| address strings, `ens#k` | a rename, alongside the allowlist |
+| doc-comment prose | nothing mechanical — `∀ params, req → ⋀ ens` is dated after a rename, not wrong |
 
 ## The pieces
 
-### 1. Lexer — small
+### 1. Lexer — small, and the ambiguity question is settled
 
 `keyword_kind` (`thermite-syntax/src/lexer.rs:217`) maps five words to five
 `TokKind` variants. Rename the words; the variants keep their names, so the 53
 downstream references do not move.
 
 `!` already lexes as `TokKind::Bang` (`:188`, `:896`), so the effect row needs a
-parser production rather than a new token. Whether `Bang` in row position is
-ambiguous with prefix negation is the one lexer question worth answering early:
-the row sits at the head of a line in item position, and a negation does not, but
-that should be confirmed rather than assumed.
+parser production rather than a new token.
+
+**The row is unambiguous by position**, checked rather than assumed. Migrating
+the whole corpus and scanning every line gives **144 row lines and zero other
+lines beginning with `!`**. The three clause expressions that start with a
+negation — `ens !result || p.count > 0` and friends — are unaffected, because the
+`!` follows a keyword and never opens a line.
 
 ### 2. Parser — the ordering change
 
@@ -99,16 +111,18 @@ whose clause expressions wrap across lines.
 33  forge/tests/string_search_conformance.rs
 33  forge/tests/divergence_solver_vacuity.rs
 30  forge/tests/mutual_recursion_conformance.rs
-28  forge/src/relax.rs
 ```
 
 These are `.th` fragments in string literals. A variant of the migration tool
-that rewrites clause lines *inside* string literals would handle most of them,
-and its round-trip check applies unchanged — which is the argument for building
-that rather than doing 619 edits by hand.
+that rewrites clause lines *inside* string literals handles them, and its
+round-trip check applies unchanged — which is the argument for building that
+rather than making 762 edits by hand.
 
-`forge/src/relax.rs` is worth looking at first: source rather than tests, so it
-may be generating clause text rather than merely containing it.
+`forge/src/relax.rs` was flagged here as worth checking first, on the theory that
+being source rather than tests it might *generate* clause text. It does not. Its
+hits are doc-comment semantics (`∀ params, req → ⋀ ens`) and diagnostics naming
+semantic addresses (`` `ens#{k}` is out of fragment ``), so it belongs in the
+rename bucket rather than the rewrite one.
 
 ## Order to do it in
 
