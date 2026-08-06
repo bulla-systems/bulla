@@ -81,14 +81,9 @@ level down:
 error: `bump` declares `owns(sched_lock)` and no `holding` block takes it
 ```
 
-It also makes acquisition order always available. Two locks in one function
-produce two nested blocks, so the order is structural rather than unstated:
-
-```thermite
-holding src {
-  holding dst { … }        // src before dst
-}
-```
+It also makes the one-lock rule below checkable at all: without lexical blocks
+there is nothing to count, and in the case where nesting is permitted the order
+is structural rather than unstated.
 
 ### The obligation
 
@@ -115,9 +110,9 @@ costs a full contract — `requires`, `ensures` and the row are all mandatory �
 scoping-only functions carry real signature noise. What is cheap in Rust is not
 cheap in Thermite.
 
-**Function scope cannot express the ordering this document's own open question
-asks for.** `! owns(a), owns(b)` does not say which is taken first, so a deadlock
-check has nothing to work with. Nested blocks state it structurally.
+**Function scope cannot express acquisition order.** `! owns(a), owns(b)` does
+not say which is taken first, so a deadlock check has nothing to work with, and
+counting held locks needs a scope to count over. Nested blocks give both.
 
 Because a block is lexical, the extent stays a syntactic property: reentrancy is
 containment — no call lexically inside a `holding r` block may reach a function
@@ -152,50 +147,70 @@ Concurrent separation logic (O'Hearn and Brookes, 2004). Mechanised repeatedly,
 and the pinned Verus ships `vstd/invariant.rs` and `vstd/rwlock.rs`, so the
 substrate is present.
 
-## Ordering: locks carry a rank
+## Ordering: one lock by default
 
 `owns(a), owns(b)` in one function and `owns(b), owns(a)` in another deadlocks,
-and today both typecheck. Requiring `holding` blocks makes the acquisition order
-*stated*; a rank makes it *checked*.
+and today both typecheck.
 
-```thermite
-lock sched_lock guards SchedState at 1;
-lock frame_lock guards FrameTable at 2;
+**The default rule is that a function holds at most one lock at a time.** No
+order is declared, because there is no nesting to order, and the entire
+deadlock-by-ordering class is gone by construction. The check is counting active
+`holding` blocks:
+
+```
+error: `migrate_task` holds `sched_lock` and takes `frame_lock` — a function may
+       hold at most one lock; see `after` if the nesting is required
 ```
 
-**Nesting requires a strictly increasing rank**, and because a `holding` block is
-lexical the check is a comparison over the block nesting rather than an analysis:
+A verified core is the right place to be restrictive, and most kernel critical
+sections take one lock. We also have no verified subsystem yet, so we have zero
+examples of a genuine two-lock critical section — designing an ordering system
+for a case nobody has produced would be specifying ahead of the evidence.
+
+**When nesting is genuinely needed, the order is relative:**
 
 ```thermite
-holding sched_lock { holding frame_lock { … } }     // 1 then 2 — accepted
-holding frame_lock { holding sched_lock { … } }     // 2 then 1 — rejected
+lock sched_lock guards SchedState;
+lock frame_lock guards FrameTable after sched_lock;
 ```
 
-Equal ranks may not be nested at all, which is what makes the rank an order
-rather than a hint. A total rank is stricter than the partial order that would
-suffice — it forbids some safe programs — and it is sound, costs one integer per
-lock, and reduces the check to a comparison. Declaration order would be cheaper
-still and is rejected: reordering two declarations would silently change which
-programs are legal.
+`after` names the relationship rather than a coordinate. It yields a DAG, which
+is the partial order actually wanted; cycles are detected at declaration rather
+than at a use site; and adding a lock is one line saying what it comes after,
+with nothing renumbered.
 
-**A lock a handler takes needs masking, not just ranking.** This is the classic
-defect a rank alone does not catch. If a handler carries `owns(r)`, then
-normal-context code holding `r` deadlocks against it on its own CPU — the handler
-fires, waits for a lock, and the code that would release it has been preempted
-and will not resume until the handler returns. So:
+An earlier draft proposed a numeric rank, `at 1` / `at 2`. It is rejected:
+the number carries no reason, inserting a lock between two existing ones forces
+renumbering, and independent additions collide. Inferring the order from every
+nesting in the program was also considered and rejected — the order would become
+whatever was written first, a library could not state what its callers must do,
+and a violation would surface as a cycle spanning modules rather than as a local
+mistake.
+
+The restriction ships first and `after` is what lifts it, which keeps the
+mechanism tied to a case that exists.
+
+## A lock a handler takes needs masking, not ordering
+
+This is the defect no ordering rule catches, because both functions involved take
+only one lock. If a handler carries `owns(r)`, then normal-context code holding
+`r` deadlocks against it on its own CPU — the handler fires, waits for the lock,
+and the code that would release it has been preempted and cannot resume until the
+handler returns. One core, no race, permanent hang.
 
 > if any function in `handlers { }` carries `owns(r)`, every normal-context
 > function carrying `owns(r)` must also carry `owns(interrupts)`
 
-Checkable from the rows and the handler declaration, and it is among the most
-common concurrency defects in real kernels.
+Checkable from the rows and the handler declaration, and among the most common
+concurrency defects in real kernels.
 
-**This is not the order the effect-rows document wants.** That one needs a
-*containment* order — a tree derived from the type structure, so
-`write(scheduler)` conflicts with `read(scheduler.runqueue)` — and it is used by
-the conflict rule. This one is a declared rank used by the deadlock check. Both
-documents previously deferred to each other as though there were a single order
-to specify.
+## This is not the effect-rows document's order
+
+That one needs a **containment** order — a tree derived from the type structure,
+so `write(scheduler)` conflicts with `read(scheduler.runqueue)` — used by the
+conflict rule. This document needs an **acquisition** order, used by the deadlock
+check, and under the rule above it usually needs none at all. Both documents
+previously deferred to each other as though there were a single order to specify.
 
 ## Open question
 
