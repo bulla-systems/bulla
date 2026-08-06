@@ -52,15 +52,51 @@ way and sits beside it: `ensures` is the postcondition of a completed execution,
 
 Crash Hoare Logic (Chen et al., FSCQ, SOSP 2015), mechanised in Coq. Settled.
 
-The work is not the logic. It is the **crash model**: which writes may be lost or
-reordered depends on the device and the barriers issued, so the model is a
-per-device assumption that must be stated as plainly as any other trusted input.
+**The work is the crash model**, not the logic. Which writes survive, and in what
+order, depends on the device and the barriers issued — so the model is a
+per-device assumption, and it has to be stated as plainly as the machine model
+and the toolchain are.
 
-## Why it is unscheduled
+### A first crash model, so the assumption is concrete
 
-Nothing in Bulla has durable state yet. Filesystems are outside the verified core
-at every rung of [the ladder](../the-ladder.md), so this becomes relevant only if
-a journal or a persistent capability store moves inside.
+The weakest useful one, and the one FSCQ started from:
 
-Recorded now because the correction is worth keeping: this is a rung we have not
-scheduled, not a barrier.
+> **Synchronous, sector-atomic.** A write is atomic at sector granularity and
+> durable when it returns. A crash maps the state to: every returned write
+> applied, and the one in flight either applied whole or not at all.
+
+That is enough for the journalling obligation above, and it is **not true of a
+real disk**. Devices buffer and reorder, and durability needs a flush. So the
+model holds only for a device driven with a flush after every write, and saying
+so is the point: it is a trusted input with a name, not a fact about hardware.
+
+The asynchronous model — where a location maps to a *set* of possible values
+until a barrier collapses it — is where a real device lives, and it is the next
+model rather than a different mechanism. The clause does not change.
+
+### It belongs in the boundary coordinate
+
+Bulla's [assurance model](../assurance-model.md) reduces a claim to per-clause
+tuples with a named boundary, and a `survives` clause closes at the crash model
+rather than at the program. A tuple carrying `survives` needs a coordinate
+naming *which* model was assumed, the way `to_platform(p)` names a platform. A
+crash claim without that coordinate is the kind of overstatement this project
+exists to avoid.
+
+## Why Bulla has not scheduled it
+
+Nothing in Bulla has durable state. Filesystems are outside the verified core at
+every rung of [the ladder](../the-ladder.md), so this becomes relevant only if a
+journal or a persistent capability store moves inside.
+
+**That reason is ours and does not transfer.** Thermite's own
+`examples/editor/editor.th` is a verified editor carrying
+`read(input), write(output), alloc, diverge, term` — a program that writes files,
+in the examples directory, today. An editor that dies mid-save guarantees nothing
+about the file, and the language has no way to say what it would guarantee. The
+corpus also carries `write(db)`, `write(log)` and `net(db)`.
+
+So the upstream case is stronger than a Bulla-scheduling note implies: one clause
+shaped like `ensures`, settled metatheory, and existing programs that need it.
+What gates it is the crash model above, which is a thing to write rather than a
+thing to discover.

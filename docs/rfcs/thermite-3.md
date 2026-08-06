@@ -413,7 +413,7 @@ is four defects with reproductions rather than a proposal.
 | [resource types](resource-types.md) | **ready** — contagion, `forget`, and `panic` settled |
 | [interference clauses](interference-clauses.md) | **ready** — the lowering hypothesis is discharged, with the stability gap recorded |
 | [protocol types](protocol-types.md) | ready as a document; depends on resource types landing |
-| [the crash clause](crash-clause.md) | **not ready** — parked for a Bulla reason that does not transfer, and the crash model is the real blocker |
+| [the crash clause](crash-clause.md) | **ready** — the crash model is named as the gate, with a first model stated |
 
 ## What this asks of a maintainer
 
