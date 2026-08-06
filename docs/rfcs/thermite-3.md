@@ -358,7 +358,7 @@ would rename. The anchor leaves them, because
 
 ```
 1. defects                    FILED — #124, #125, #126
-2. the RFC process            creates the vehicle; without it there is nowhere to file
+2. the RFC process            FILED — Thermite PR #127
 3. the anchor                 syntax only — full-words-anchor.md
 4. the effect algebra         what a row is; underpins 5
 5. verified effect rows       rung 3, the multiplier
@@ -423,9 +423,10 @@ Read in order, the work is small and gets larger:
    [#124](https://github.com/dollspace-gay/Thermite/issues/124),
    [#125](https://github.com/dollspace-gay/Thermite/issues/125),
    [#126](https://github.com/dollspace-gay/Thermite/issues/126).
-2. A process proposal that migrates the three existing RFCs out of issues and
-   adds a front-matter field feeding the REQ registry. Arrives with its template,
-   its gate script, and the migration done.
+2. A process proposal that migrates the four existing RFCs out of issues and
+   adds a front-matter field feeding the REQ registry. **Filed** as
+   [PR #127](https://github.com/dollspace-gay/Thermite/pull/127), with its gate
+   script, its own requirements, and the migration done.
 3. A rename with a migration tool and a corpus that still certifies.
 
 Nothing after that is proposed until those land, because a surface nobody adopted
