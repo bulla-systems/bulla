@@ -103,7 +103,7 @@ whose clause expressions wrap across lines.
 
 ### 6. The embedded test corpus — the actual work
 
-619 clause lines inside 66 Rust files. The heaviest are conformance suites:
+762 clause lines inside 114 Rust files. The heaviest are conformance suites:
 
 ```
 45  forge/tests/operators_conformance.rs
