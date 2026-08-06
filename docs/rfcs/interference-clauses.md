@@ -142,9 +142,74 @@ Rely-guarantee (Jones, 1983), refined through RGSep (Vafeiadis and Parkinson,
 2007) and generalised by Iris. Settled and mechanised. The pinned Verus ships
 `atomic_ghost.rs` and `state_machines_macros`.
 
-**Lowering hypothesis, flagged as unverified:** that `asks`/`promises` factor
-onto the tokenized-state-machine machinery, giving a Thermite-idiomatic surface
-over Verus's existing soundness. Someone should check that before proposing it.
+### The lowering hypothesis, checked
+
+An earlier draft flagged as unverified that `asks`/`promises` factor onto the
+tokenized-state-machine machinery, and said someone should check it before
+proposing this. Checked against the pinned Verus's `vstd/tokens.rs`, and it
+holds — for the monotone fragment, which is the fragment this document scopes
+itself to.
+
+The mechanism is **persistent sharding**. VerusSync fields carry a sharding
+strategy, and five of them are monotone: `persistent_option`, `persistent_map`,
+`persistent_set`, `persistent_bool`, `persistent_count`. What makes them the
+right target is a single property, stated in `tokens.rs` itself:
+
+> for the `persistent_set` strategy, the token for any given element is not
+> unique, but is **`Copy`**
+
+A persistent token is duplicable precisely because the fact it witnesses can
+never be retracted. So an observation of monotone shared state can be held,
+copied and passed around, and no concurrent transition can invalidate it. That is
+the rely, as a type.
+
+`persistent_count` makes it explicit:
+
+```rust
+proof fn weaken(tracked &self, count: nat) -> (tracked s: Self)
+    requires count <= self.count(),
+```
+
+From a witness that the count is at least `n`, derive one for any `m ≤ n`. That
+is *"whatever you observed is a lower bound that stays a lower bound"* — the
+sentence this document uses to motivate lock-free reads — as a lemma that already
+ships.
+
+| this document | vstd |
+|---|---|
+| monotone shared field | `persistent_set` / `persistent_bool` / `persistent_count` |
+| `asks` — others only add | persistence: the token is `Copy` and cannot be invalidated |
+| `promises` — I add exactly this | the transition on the sharded field |
+| an observation survives interference | `MonotonicCountToken::weaken` |
+
+**The confirmed scope equals the declared scope**, which is the result worth
+having. This document covers "shared, lock-free, monotone" and puts "shared,
+lock-free, arbitrary" out of reach as needing full CSL or Iris. The persistent
+shardings cover the monotone fragment and nothing more, so the boundary drawn on
+taste turns out to be the boundary the substrate draws.
+
+**One gap the check found.** The worked example's rely has two conjuncts and only
+one of them maps:
+
+```thermite
+asks {
+  final(s).epoch == s.epoch;                        // stability — does NOT map
+  final(s).acked | s.acked == final(s).acked;       // monotone  — persistent_set
+}
+```
+
+Monotone growth is persistent sharding. **Stability is not.** A persistent token
+witnessing `epoch == e` would have to be invalidated when the epoch advances,
+which is exactly what persistence forbids, so the epoch cannot be a persistent
+field. `#[sharding(constant)]` covers a field that never changes at all, and the
+epoch is not that either — it is constant *for the duration of one shootdown* and
+changes between them.
+
+So a stability conjunct is a protocol-scoped fact rather than a field-level one,
+and it needs a different treatment: either an instance per round, so the epoch is
+genuinely `constant` within it, or a mechanism this document does not yet have.
+That is the one part of the lowering that is not settled, and it is narrower than
+the original hypothesis feared.
 
 ## Sequencing
 
