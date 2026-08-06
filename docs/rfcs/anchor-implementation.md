@@ -113,10 +113,20 @@ whose clause expressions wrap across lines.
 30  forge/tests/mutual_recursion_conformance.rs
 ```
 
-These are `.th` fragments in string literals. A variant of the migration tool
-that rewrites clause lines *inside* string literals handles them, and its
-round-trip check applies unchanged — which is the argument for building that
-rather than making 762 edits by hand.
+These are `.th` fragments in string literals, and **the tool now handles them**:
+
+```
+$ thermite-migrate.py --check --rust .
+round-trip: 384/384 files restore byte for byte
+clause-bearing literals with no effect row, left for review: 518
+```
+
+It rewrites a literal only when the literal declares an item, carries an effect
+row, and round-trips reversibly on its own. The row is what distinguishes a
+Thermite fragment from *expected lowered Verus*, which also declares items and,
+after the rename, uses the same clause words. The 518 it declines are for review
+rather than silent rewriting; most are expected output and prose, and some are
+genuine `struct … inv` fragments with no `fn` to carry a row.
 
 `forge/src/relax.rs` was flagged here as worth checking first, on the theory that
 being source rather than tests it might *generate* clause text. It does not. Its

@@ -96,6 +96,19 @@ double.terminates by    → malformed address   (rejected before lookup)
 
 Each renamed clause needs its segment renamed in that allowlist. One line each.
 
+## An argument the migration turned up
+
+After the rename, Thermite's `requires` and Verus's `requires` are the same word,
+so **lowering becomes identity rather than translation** for four of the five
+clauses. Emitted Verus reads against its Thermite source directly, and a reader
+comparing the two no longer has to hold a mapping in their head.
+
+That was not why the change was proposed, and it is a real argument for it. It
+surfaced because a text tool cannot tell a Thermite fragment from an *expected
+lowered-output* fragment by vocabulary once the two vocabularies agree — which is
+a cost for the migration and a benefit for everyone reading the output
+afterwards.
+
 ## Why the row moves
 
 `fx E` is a noun phrase sitting among verb phrases, and it is not a claim about
@@ -142,12 +155,29 @@ rewrites in both directions, so the claim is checkable before any parser accepts
 the new surface:
 
 ```
-$ thermite-migrate.py --check conformance examples
-round-trip: 67/67 files restore byte for byte
+$ thermite-migrate.py --check --rust .
+round-trip: 384/384 files restore byte for byte
+clause-bearing literals with no effect row, left for review: 518
 ```
 
-`to_v2(to_v3(x)) == x` for every file in the corpus, including the 24 clauses
-whose expressions wrap. That is a stronger check than re-certifying, which cannot
+`to_v2(to_v3(x)) == x` for every file in the workspace — the corpus, and the
+`.th` fragments embedded in Rust string literals, which is where most of the
+volume lives. That includes the 24 clauses whose expressions wrap across lines.
+
+The second line is the tool reporting what it deliberately did **not** touch.
+Three things must not be rewritten, and each was found by a failure that the
+previous rule let through:
+
+| must not rewrite | why the earlier rule missed it |
+|---|---|
+| assertions on lowered Verus | the two vocabularies agree after the rename |
+| prose such as `"inv text is the verbatim clause source"` | renaming a sentence is perfectly reversible |
+| expected Verus output that declares items | it has `pub fn` too |
+
+What separates them is that **Thermite's effect row is mandatory and Verus has no
+equivalent**, so the row is the fingerprint of a Thermite fragment. A per-literal
+reversibility check backs it up: the tool only rewrites what it can prove it can
+restore, and reports the rest rather than guessing. That is a stronger check than re-certifying, which cannot
 be run at all until the front end changes.
 
 Two facts the round-trip forced into the open, both of which a diff-by-eye would

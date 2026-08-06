@@ -92,8 +92,7 @@ def _clauses(lines: list[str], start: int, pattern: re.Pattern):
     return out, i
 
 
-def to_v3(text: str) -> str:
-    lines = text.split("\n")
+def _lines_to_v3(lines: list[str]) -> list[str]:
     out: list[str] = []
     i = 0
     while i < len(lines):
@@ -117,11 +116,14 @@ def to_v3(text: str) -> str:
             out.append(f"{indent}{V2_TO_V3[kw]}{gap}{expr}")
             out.extend(body[1:])
         i = nxt
-    return "\n".join(out)
+    return out
 
 
-def to_v2(text: str) -> str:
-    lines = text.split("\n")
+def to_v3(text: str) -> str:
+    return "\n".join(_lines_to_v3(text.split("\n")))
+
+
+def _lines_to_v2(lines: list[str]) -> list[str]:
     out: list[str] = []
     i = 0
     while i < len(lines):
@@ -153,7 +155,105 @@ def to_v2(text: str) -> str:
         for kw, body in tail:
             emit(kw, body)
         i = nxt
-    return "\n".join(out)
+    return out
+
+
+def to_v2(text: str) -> str:
+    return "\n".join(_lines_to_v2(text.split("\n")))
+
+
+# --- Rust sources: the corpus is also embedded in string literals -------------
+
+_RAW = re.compile(r'r(#*)"')
+
+
+def _rust_literals(text: str):
+    """Yield (start, end, separator) for the *contents* of every Rust string
+    literal. A raw literal holds real newlines; a plain one holds the two-character
+    escape, so each is split on its own separator."""
+    i, n = 0, len(text)
+    while i < n:
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j + 1
+        elif text.startswith("/*", i):
+            j = text.find("*/", i)
+            i = n if j < 0 else j + 2
+        elif text[i] == "'":
+            # a char literal may contain a quote: '"'
+            j = i + 1
+            while j < n and text[j] != "'":
+                j += 2 if text[j] == "\\" else 1
+            i = j + 1
+        elif (m := _RAW.match(text, i)):
+            close = '"' + m.group(1)
+            start = m.end()
+            j = text.find(close, start)
+            if j < 0:
+                break
+            yield (start, j, "\n")
+            i = j + len(close)
+        elif text[i] == '"':
+            start = j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            yield (start, j, "\\n")
+            i = j + 1
+        else:
+            i += 1
+
+
+SKIPPED: list[str] = []
+UNMIGRATED: list[str] = []
+
+
+def _rewrite_rust(text: str, to_v3_dir: bool) -> str:
+    """Rewrite `.th` fragments inside Rust string literals.
+
+    A literal is only rewritten when the rewrite is **provably reversible for
+    that literal**: forward, then back, must restore it exactly. Anything else is
+    left alone and recorded.
+
+    A literal is only considered at all when it *declares* something — a `fn`,
+    `struct`, `enum` or `protocol`. A Thermite fragment always does and a prose
+    assertion message never does, and vocabulary cannot separate them: renaming
+    the `inv` in "inv text is the verbatim clause source" is reversible, so the
+    reversibility check below would wave it through.
+
+    That check is what keeps the tool off assertions about *lowered Verus*, which
+    the lowering tests are full of. After the rename Thermite's `requires` and
+    Verus's are the same word — good for the lowering, which becomes identity
+    rather than translation, and ambiguous for a text tool, which cannot tell a
+    Thermite fragment from an expected-output fragment by vocabulary alone.
+    Reversibility can tell them apart, and it needs no heuristic.
+    """
+    fwd, back = (_lines_to_v3, _lines_to_v2) if to_v3_dir else (_lines_to_v2, _lines_to_v3)
+    out, last = [], 0
+    for start, end, sep in _rust_literals(text):
+        body = text[start:end]
+        # A fragment declares something; a sentence does not. Vocabulary alone
+        # cannot tell `"inv text is the verbatim clause source"` — an assertion
+        # message — from source, and renaming prose is perfectly reversible, so
+        # the reversibility gate below cannot catch it either.
+        if not re.search(r"(^|" + re.escape(sep) + r")\s*(pub\s+)?(spec\s+)?(fn|struct|enum|protocol)\s", body):
+            continue
+        # Thermite's effect row is mandatory and Verus has no equivalent, so it
+        # is what separates a Thermite fragment from expected *lowered output* —
+        # which also declares items, and which uses Verus's own `requires`.
+        marker = r"(^|" + re.escape(sep) + r")\s*" + (r"fx\s" if to_v3_dir else r"!\s")
+        if not re.search(marker, body):
+            UNMIGRATED.append(body[:60].replace(sep, " ⏎ "))
+            continue
+        lines = body.split(sep)
+        rewritten = sep.join(fwd(lines))
+        if sep.join(back(rewritten.split(sep))) != body:
+            SKIPPED.append(body[:60].replace(sep, " ⏎ "))
+            continue
+        out.append(text[last:start])
+        out.append(rewritten)
+        last = end
+    out.append(text[last:])
+    return "".join(out)
 
 
 def main(argv: list[str]) -> int:
@@ -163,10 +263,15 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--check", action="store_true",
                     help="round-trip every file and report any that does not restore byte for byte")
     ap.add_argument("--write", action="store_true", help="rewrite files in place")
+    ap.add_argument("--rust", action="store_true",
+                    help="also rewrite .th fragments embedded in Rust string literals")
     args = ap.parse_args(argv)
 
+    pats = ("*.th", "*.rs") if args.rust else ("*.th",)
     files = sorted(
-        {f for p in args.paths for f in ([p] if p.is_file() else p.rglob("*.th"))}
+        {f for p in args.paths for f in ([p] if p.is_file()
+                                         else [g for pat in pats for g in p.rglob(pat)])
+         if "target" not in f.parts}
     )
     if not files:
         print("no .th files", file=sys.stderr)
@@ -176,16 +281,27 @@ def main(argv: list[str]) -> int:
         bad = []
         for f in files:
             src = f.read_text(encoding="utf-8")
-            if to_v2(to_v3(src)) != src:
+            if f.suffix == ".rs":
+                rt = _rewrite_rust(_rewrite_rust(src, True), False)
+            else:
+                rt = to_v2(to_v3(src))
+            if rt != src:
                 bad.append(f)
         print(f"round-trip: {len(files) - len(bad)}/{len(files)} files restore byte for byte")
+        if SKIPPED:
+            print(f"literals left alone as not provably reversible: {len(SKIPPED)}")
+        if UNMIGRATED:
+            print(f"clause-bearing literals with no effect row, left for review: {len(set(UNMIGRATED))}")
         for f in bad:
             print(f"  DIFFERS  {f}", file=sys.stderr)
         return 1 if bad else 0
 
-    fn = to_v2 if args.to_v2 else to_v3
     for f in files:
-        result = fn(f.read_text(encoding="utf-8"))
+        src = f.read_text(encoding="utf-8")
+        if f.suffix == ".rs":
+            result = _rewrite_rust(src, not args.to_v2)
+        else:
+            result = (to_v2 if args.to_v2 else to_v3)(src)
         if args.write:
             f.write_text(result, encoding="utf-8")
         else:
