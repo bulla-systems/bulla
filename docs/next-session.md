@@ -34,7 +34,7 @@ compress.
 ```
 1. defects            FILED    Thermite #124, #125, #126
 2. the RFC process    FILED    Thermite PR #127 — open, CI green
-3. the anchor         FILED    Thermite PR #128 — open, stacked on #127
+3. the anchor         FILED    Thermite PR #128 — open, CI green, stacked on #127
 4. the effect algebra ready  ← you are here
 5. verified effect rows        rung 3, the multiplier
 6. shared-state invariants     rung 4
