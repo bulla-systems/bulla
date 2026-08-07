@@ -36,6 +36,8 @@ compress.
 2. the RFC process    FILED    Thermite PR #127 — open, CI green
 3. the anchor         FILED    Thermite PR #128 — open, CI green, stacked on #127
    the horizon        FILED    Thermite PR #129 — RFC-7, the whole surface, on #128
+4-9. the capability set  STAGED  RFC-8..14 in maxinelevesque/Thermite3-staging,
+                                 branch rfcs/thermite-3-set — written, gated, NOT filed
 4. the effect algebra ready  ← you are here
 5. verified effect rows        rung 3, the multiplier
 6. shared-state invariants     rung 4
@@ -111,7 +113,11 @@ subject is the item. It decided the names; do not treat it as decoration.
 
 ## Open, and yours to decide
 
-- **Steps 4 through 9 are blocked by our own rule**, not by anyone else:
+- **The capability RFCs are written and staged, not filed.** RFC-8 through RFC-14
+  live in the staging fork with their requirements registered and every gate
+  green, so nothing is blocked on a reply. They stay unfiled until the anchor
+  lands. Filing them is a decision, not a next step.
+- **Steps 4 through 9 are blocked by our own rule** for *filing*, not for work:
   `thermite-3.md` says nothing after the anchor is proposed until it lands,
   because a surface nobody adopted is not a foundation for six proposals. Six
   upstream items are open with no maintainer response. Filing a seventh is the

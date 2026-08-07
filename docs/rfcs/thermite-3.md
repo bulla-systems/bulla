@@ -443,6 +443,11 @@ is four defects with reproductions rather than a proposal.
 | [the crash clause](crash-clause.md) | **ready** — the crash model is named as the gate, with a first model stated |
 | **this document** | **FILED** — [PR #129](https://github.com/dollspace-gay/Thermite/pull/129), the horizon, on top of #128 |
 
+RFC-8 through RFC-14 are **staged** in
+[`maxinelevesque/Thermite3-staging`](https://github.com/maxinelevesque/Thermite3-staging/tree/rfcs/thermite-3-set),
+branch `rfcs/thermite-3-set`: written as upstream RFCs with their requirements
+registered and every gate green, and unfiled until the anchor lands.
+
 ## The cost of each step
 
 Read in order, the work is small and gets larger:
