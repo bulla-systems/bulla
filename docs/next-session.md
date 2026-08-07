@@ -36,15 +36,27 @@ compress.
 2. the RFC process    FILED    Thermite PR #127 — open, CI green
 3. the anchor         FILED    Thermite PR #128 — open, CI green, stacked on #127
    the horizon        FILED    Thermite PR #129 — RFC-7, the whole surface, on #128
-4-9. the capability set  STAGED  RFC-8..14 in maxinelevesque/Thermite3-staging,
-                                 branch rfcs/thermite-3-set — written, gated, NOT filed
-4. the effect algebra ready  ← you are here
-5. verified effect rows        rung 3, the multiplier
-6. shared-state invariants     rung 4
-7. resource types              rung 5, the honest goal
-8. interference clauses        rung 6
-9. protocol types              rung 7
+4–9. capability set   STAGED   RFC-8..14, written and gated, deliberately unfiled
 ```
+
+**The Thermite 3 work has moved out of this repository.** It now lives in
+[`maxinelevesque/Thermite3-staging`](https://github.com/maxinelevesque/Thermite3-staging),
+a staging fork of Thermite with its own `day` and `kan`. Bulla keeps the design
+record in `docs/rfcs/`; the staging fork is where the implementation happens and
+where the RFCs are shaped for upstream.
+
+| branch there | what |
+|---|---|
+| `main` | process layer, `tooling/thermite3-migrate` |
+| `anchor/implementation` | RFC-6's front end, committed, both crates building |
+| `rfcs/thermite-3-set` | RFC-8 … RFC-14, 19 requirements, gates green |
+
+Its issues #1–#9 mirror the upstream bug reports, which stay open upstream and
+canonical. `bridge/land-the-anchor` is the live path there.
+
+The whole design set is also published as a site:
+[maxine.science/thermite-3](https://maxine.science/thermite-3/), built from
+[`maxinelevesque/thermite-3`](https://github.com/maxinelevesque/thermite-3).
 
 ### What is proved about the anchor, and it is filed
 
@@ -111,6 +123,22 @@ its round-trip, with its two measured gaps recorded in place.
 **The organising rule:** every clause is a third-person-singular verb whose
 subject is the item. It decided the names; do not treat it as decoration.
 
+## What is next *here*
+
+Thermite 3 has its own repository now, so what remains in Bulla is Bulla's own
+work: **T0, the execution-context subsystem**, which `docs/roadmap.md` calls the
+whole near-term plan. It is designed fresh rather than ported — `src/context.th`
+stays a probe and is not restarted.
+
+It is gated on G4 and G12, **both being fixed upstream directly**. Those two are
+one blocker rather than two: G4 means the kernel cannot be modelled, G12 means a
+correct model still cannot be shown to meet the §7 floor, so fixing either alone
+buys nothing demonstrable.
+
+The design work does not wait on them. Architecture §5.3 settles that Bulla
+designs the composed model and encodes it flat by a stated rule, and the flat
+encoding certifies today.
+
 ## Open, and yours to decide
 
 - **The capability RFCs are written and staged, not filed.** RFC-8 through RFC-14
@@ -130,8 +158,8 @@ subject is the item. It decided the names; do not treat it as decoration.
 
 ## Blocked, not forgotten
 
-**G4 (#122) and G12 are being fixed upstream by Maxine directly, as of
-2026-08-06. Do not start on either.** Together they are the whole critical path
+**G4 (#122) and G12 are being fixed upstream directly, as of 2026-08-06. Do not
+start on either.** They are also mirrored as staging issues #5 and #7.** Together they are the whole critical path
 for Bulla having any verified evidence: G4 means the kernel cannot be modelled,
 G12 means a correct model still cannot be shown to meet the §7 floor, so fixing
 one without the other buys nothing demonstrable.
